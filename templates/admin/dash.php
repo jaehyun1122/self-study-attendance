@@ -4,9 +4,6 @@
     <h1>관리자 대시보드</h1>
     <p>오늘 출석과 전체 기록을 한눈에 확인합니다.</p>
   </div>
-  <a class="btn btn-success" href="/admin/list.php">
-    <i class="bi bi-table me-1"></i> 출석 목록 보기
-  </a>
 </div>
 
 <div class="row g-3 align-items-stretch mb-3">

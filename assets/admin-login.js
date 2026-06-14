@@ -1,8 +1,10 @@
 (function () {
+  const LOGIN_REDIRECT_DELAY_MS = 1000;
   const form = document.getElementById('adminLoginForm');
   const passwordInput = document.getElementById('adminPasswordInput');
   const loginButton = document.getElementById('loginButton');
   const installNotice = document.getElementById('installNotice');
+  let isRedirecting = false;
 
   function toast(message, type = 'success') {
     if (window.Toastify) {
@@ -63,29 +65,41 @@
   }
 
   const params = new URLSearchParams(window.location.search);
+  const reason = params.get('reason') || '';
 
-  if (params.has('logout') || params.has('password') || params.has('login')) {
+  if (reason) {
     localStorage.removeItem('admin_token');
   }
 
-  if (params.get('login') === 'required') {
-    toast('로그인이 필요합니다.', 'error');
-  }
+  const reasonMessages = {
+    'login-required': ['로그인이 필요합니다.', 'error'],
+    'session-expired': ['로그인 시간이 만료되었습니다. 다시 로그인해주세요.', 'error'],
+    'logout': ['로그아웃되었습니다.', 'success'],
+    'password-change': ['비밀번호가 변경되었습니다. 다시 로그인해주세요.', 'success'],
+    'etc': ['알 수 없는 이유로 로그아웃되었습니다. 다시 로그인해주세요.', 'error'],
+  };
+  const legacyReasonAliases = {
+    required: 'login-required',
+    expired: 'session-expired',
+    password: 'password-change',
+    changed: 'password-change',
+  };
+  const normalizedReason = legacyReasonAliases[reason] || reason;
 
-  if (params.get('login') === 'expired') {
-    toast('로그인 시간이 만료되었습니다. 다시 로그인해주세요.', 'error');
-  }
-
-  if (params.get('logout') === '1') {
-    toast('로그아웃되었습니다.');
-  }
-
-  if (params.get('password') === 'changed') {
-    toast('비밀번호가 변경되었습니다. 다시 로그인해주세요.');
+  if (normalizedReason && reasonMessages[normalizedReason]) {
+    const [message, type] = reasonMessages[normalizedReason];
+    toast(message, type);
+  } else if (reason) {
+    toast(`다시 로그인해주세요. (${reason})`, reasonMessages.etc[1]);
   }
 
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
+
+    if (loginButton.disabled) {
+      return;
+    }
+
     const password = passwordInput.value;
 
     if (!password) {
@@ -108,12 +122,19 @@
       }
 
       localStorage.setItem('admin_token', data.result.token);
-      window.location.href = '/admin/dash.php';
+      toast('로그인되었습니다.');
+      loginButton.textContent = '이동 중...';
+      isRedirecting = true;
+      setTimeout(() => {
+        window.location.href = '/admin/dash.php';
+      }, LOGIN_REDIRECT_DELAY_MS);
     } catch (error) {
       toast('로그인 요청 중 오류가 발생했습니다.', 'error');
     } finally {
-      loginButton.disabled = false;
-      loginButton.textContent = '로그인';
+      if (!isRedirecting) {
+        loginButton.disabled = false;
+        loginButton.textContent = '로그인';
+      }
     }
   });
 

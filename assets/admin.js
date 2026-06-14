@@ -1,7 +1,13 @@
 (function () {
   const TOKEN_KEY = 'admin_token';
+  const DEFAULT_SYNC_INTERVAL_MS = 5000;
   const token = window.ADMIN_TOKEN || localStorage.getItem(TOKEN_KEY);
   const path = window.location.pathname;
+
+  let summaryServerTime = null;
+  let summaryClockTimer = null;
+  let summarySyncTimer = null;
+  let summarySyncIntervalMs = DEFAULT_SYNC_INTERVAL_MS;
 
   if (window.ADMIN_TOKEN) {
     localStorage.setItem(TOKEN_KEY, window.ADMIN_TOKEN);
@@ -47,10 +53,9 @@
     if (box) box.innerHTML = '';
   }
 
-  function redirectLogin(reason = '') {
+  function redirectLogin(reason = 'etc') {
     localStorage.removeItem(TOKEN_KEY);
-    const query = reason ? `?${reason}` : '';
-    window.location.href = `/admin/${query}`;
+    window.location.href = `/admin/?reason=${encodeURIComponent(reason || 'etc')}`;
   }
 
   async function api(url, body = {}) {
@@ -72,7 +77,7 @@
     const data = await response.json().catch(() => null);
 
     if (response.status === 401) {
-      redirectLogin('login=expired');
+      redirectLogin('session-expired');
       return null;
     }
 
@@ -102,6 +107,18 @@
     })[char]);
   }
 
+  function formatDateTime(date) {
+    return [
+      date.getFullYear(),
+      String(date.getMonth() + 1).padStart(2, '0'),
+      String(date.getDate()).padStart(2, '0'),
+    ].join('-') + ' ' + [
+      String(date.getHours()).padStart(2, '0'),
+      String(date.getMinutes()).padStart(2, '0'),
+      String(date.getSeconds()).padStart(2, '0'),
+    ].join(':');
+  }
+
   function formatDateTimeText(value) {
     const text = String(value || '').trim();
 
@@ -118,43 +135,115 @@
     }
 
     const date = new Date(text);
+    return Number.isNaN(date.getTime()) ? text || '-' : formatDateTime(date);
+  }
 
-    if (Number.isNaN(date.getTime())) {
-      return text || '-';
+  function parseServerTime(value) {
+    const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/);
+
+    if (!match) {
+      return new Date();
     }
 
-    return [
-      date.getFullYear(),
-      String(date.getMonth() + 1).padStart(2, '0'),
-      String(date.getDate()).padStart(2, '0'),
-    ].join('-') + ' ' + [
-      String(date.getHours()).padStart(2, '0'),
-      String(date.getMinutes()).padStart(2, '0'),
-      String(date.getSeconds()).padStart(2, '0'),
-    ].join(':');
+    return new Date(
+      Number(match[1]),
+      Number(match[2]) - 1,
+      Number(match[3]),
+      Number(match[4]),
+      Number(match[5]),
+      Number(match[6])
+    );
+  }
+
+  function syncIntervalMs(result = null) {
+    const seconds = Number(result?.server_time_sync_interval_seconds || 5);
+    return Math.max(1, seconds) * 1000;
+  }
+
+  function syncSummaryServerTime(value, element) {
+    summaryServerTime = parseServerTime(value);
+    updateSummaryServerTime(element);
+
+    if (summaryClockTimer) {
+      return;
+    }
+
+    summaryClockTimer = setInterval(() => {
+      if (!summaryServerTime) {
+        return;
+      }
+
+      summaryServerTime.setSeconds(summaryServerTime.getSeconds() + 1);
+      updateSummaryServerTime(element);
+    }, 1000);
+  }
+
+  function updateSummaryServerTime(element) {
+    if (!element) {
+      return;
+    }
+
+    element.textContent = summaryServerTime ? formatDateTime(summaryServerTime) : '-';
+  }
+
+  function scheduleSummarySync(result, loadSummary) {
+    const nextIntervalMs = syncIntervalMs(result);
+
+    if (summarySyncTimer && nextIntervalMs === summarySyncIntervalMs) {
+      return;
+    }
+
+    summarySyncIntervalMs = nextIntervalMs;
+
+    if (summarySyncTimer) {
+      clearInterval(summarySyncTimer);
+    }
+
+    summarySyncTimer = setInterval(() => loadSummary(false), summarySyncIntervalMs);
   }
 
   function textLength(value) {
     return Array.from(String(value || '')).length;
   }
 
-  function validateStudentInfo(studentNo, name) {
-    const studentNoInput = document.getElementById('studentNoInput');
-    const nameInput = document.getElementById('nameInput');
-    const studentNoLength = Number(studentNoInput?.getAttribute('maxlength') || 5);
-    const studentNameMaxLength = Number(nameInput?.getAttribute('maxlength') || 5);
+  function inputRange(input, fallbackMin, fallbackMax) {
+    const min = Number(input?.getAttribute('minlength') || fallbackMin);
+    const max = Number(input?.getAttribute('maxlength') || fallbackMax);
+    return {
+      min: Number.isFinite(min) ? min : fallbackMin,
+      max: Number.isFinite(max) ? max : fallbackMax,
+    };
+  }
 
-    if (textLength(studentNo) !== studentNoLength) {
-      showAlert(`학번은 ${studentNoLength}자로 입력해주세요.`);
-      return false;
+  function lengthMessage(subject, range) {
+    if (range.min === range.max) {
+      return `${subject} ${range.min}자로 입력해주세요.`;
     }
 
-    if (textLength(name) > studentNameMaxLength) {
-      showAlert(`이름은 ${studentNameMaxLength}자까지 입력할 수 있습니다.`);
+    if (range.min < 1) {
+      return `${subject} ${range.max}자까지 입력할 수 있습니다.`;
+    }
+
+    return `${subject} ${range.min}자 이상 ${range.max}자까지 입력할 수 있습니다.`;
+  }
+
+  function validateLength(value, subject, range) {
+    const length = textLength(value);
+
+    if (length < range.min || length > range.max) {
+      showAlert(lengthMessage(subject, range));
       return false;
     }
 
     return true;
+  }
+
+  function validateStudentInfo(studentNo, name) {
+    const studentNoInput = document.getElementById('studentNoInput');
+    const nameInput = document.getElementById('nameInput');
+
+    return validateLength(studentNo, '학번은', inputRange(studentNoInput, 5, 5))
+      && validateLength(name, '이름은', inputRange(nameInput, 1, 5));
   }
 
   function initDash() {
@@ -162,20 +251,37 @@
     const totalCount = document.getElementById('totalCount');
     const serverTime = document.getElementById('summaryServerTime');
 
-    api('/api/admin-summary.php')
-      .then((data) => {
+    async function loadSummary(showError = true) {
+      try {
+        const data = await api('/api/admin-summary.php');
         if (!data) return;
+
         if (data.status !== 1) {
-          toast(data.msg || '대시보드 정보를 불러오지 못했습니다.', 'error');
+          if (showError) {
+            toast(data.msg || '대시보드 정보를 불러오지 못했습니다.', 'error');
+          }
           return;
         }
 
         const result = data.result || {};
         todayCount.textContent = `${Number(result.today || 0)}건`;
         totalCount.textContent = `${Number(result.total || 0)}건`;
-        serverTime.textContent = formatDateTimeText(result.server_time);
-      })
-      .catch(() => toast('대시보드 정보를 불러오는 중 오류가 발생했습니다.', 'error'));
+
+        if (result.server_time) {
+          syncSummaryServerTime(result.server_time, serverTime);
+        }
+
+        scheduleSummarySync(result, loadSummary);
+      } catch (error) {
+        scheduleSummarySync(null, loadSummary);
+
+        if (showError) {
+          toast('대시보드 정보를 불러오는 중 오류가 발생했습니다.', 'error');
+        }
+      }
+    }
+
+    loadSummary(true);
   }
 
   function initList() {
@@ -183,6 +289,8 @@
     const dateInput = document.getElementById('dateInput');
     const form = document.getElementById('attendanceFilter');
     const button = document.getElementById('loadListButton');
+    const exportButton = document.getElementById('exportListButton');
+    let currentRows = [];
 
     dateInput.value = params.get('date') || todayForInput();
 
@@ -194,9 +302,16 @@
       loadList();
     });
 
+    exportButton.addEventListener('click', () => {
+      exportCsv(currentRows);
+    });
+
     async function loadList() {
       clearAlert();
+      currentRows = [];
+      renderLoading();
       button.disabled = true;
+      exportButton.disabled = true;
       button.textContent = '조회 중...';
 
       try {
@@ -205,19 +320,53 @@
 
         if (data.status !== 1) {
           showAlert(data.msg || '출석 목록을 불러오지 못했습니다.');
+          renderTableNotice('출석 목록을 불러오지 못했습니다.', '잠시 후 다시 조회해주세요.');
           return;
         }
 
         renderList(Array.isArray(data.result) ? data.result : []);
       } catch (error) {
         showAlert('출석 목록을 불러오는 중 오류가 발생했습니다.');
+        renderTableNotice('출석 목록을 불러오지 못했습니다.', '네트워크 상태를 확인한 뒤 다시 조회해주세요.');
       } finally {
         button.disabled = false;
+        exportButton.disabled = false;
         button.textContent = '조회';
       }
     }
 
+    function renderLoading() {
+      document.getElementById('listTitle').textContent = `${dateInput.value} 출석 기록`;
+      document.getElementById('attendanceCount').textContent = '조회 중';
+      document.getElementById('attendanceTableBody').innerHTML = `
+        <tr>
+          <td class="text-center py-5" colspan="5">
+            <div class="empty-table-state">
+              <div class="loading-spinner" aria-hidden="true"></div>
+              <strong>조회 중입니다.</strong>
+            </div>
+          </td>
+        </tr>
+      `;
+    }
+
+    function renderTableNotice(title, description) {
+      currentRows = [];
+      document.getElementById('attendanceCount').textContent = '0건';
+      document.getElementById('attendanceTableBody').innerHTML = `
+        <tr>
+          <td class="text-center py-5" colspan="5">
+            <div class="empty-table-state">
+              <strong>${escapeHtml(title)}</strong>
+              <p class="text-secondary mb-0">${escapeHtml(description)}</p>
+            </div>
+          </td>
+        </tr>
+      `;
+    }
+
     function renderList(rows) {
+      currentRows = rows;
       document.getElementById('listTitle').textContent = `${dateInput.value} 출석 기록`;
       document.getElementById('attendanceCount').textContent = `${rows.length}건`;
       const body = document.getElementById('attendanceTableBody');
@@ -227,7 +376,6 @@
           <tr>
             <td class="text-center py-5" colspan="5">
               <div class="empty-table-state">
-                <div class="empty-table-icon">0</div>
                 <strong>출석 기록이 없습니다.</strong>
                 <p class="text-secondary mb-0">선택한 날짜에 등록된 출석이 없어요.</p>
               </div>
@@ -240,7 +388,7 @@
       body.innerHTML = rows.map((row, index) => `
         <tr>
           <td><span class="text-secondary">${index + 1}</span></td>
-          <td><span class="badge rounded-pill text-bg-light border">${escapeHtml(row.student_no)}</span></td>
+          <td>${escapeHtml(row.student_no)}</td>
           <td class="fw-semibold">${escapeHtml(row.name)}</td>
           <td class="text-nowrap">${escapeHtml(formatDateTimeText(row.attend_datetime || row.created_at || row.attend_date))}</td>
           <td class="text-end">
@@ -277,6 +425,44 @@
       });
     }
 
+    function exportCsv(rows) {
+      if (rows.length === 0) {
+        toast('내보낼 출석 기록이 없습니다.', 'error');
+        return;
+      }
+
+      const csvRows = [
+        ['순서', '학번', '이름', '출석일시'],
+        ...rows.map((row, index) => [
+          index + 1,
+          row.student_no,
+          row.name,
+          formatDateTimeText(row.attend_datetime || row.created_at || row.attend_date),
+        ]),
+      ];
+      const csv = `\ufeff${csvRows.map((row) => row.map(csvEscape).join(',')).join('\r\n')}`;
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+
+      link.href = url;
+      link.download = `attendance-${dateInput.value}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    function csvEscape(value) {
+      const text = String(value ?? '');
+
+      if (/[",\r\n]/.test(text)) {
+        return `"${text.replace(/"/g, '""')}"`;
+      }
+
+      return text;
+    }
+
     loadList();
   }
 
@@ -308,7 +494,6 @@
         document.getElementById('studentNoInput').value = record.student_no;
         document.getElementById('nameInput').value = record.name;
         document.getElementById('attendDateTimeText').textContent = formatDateTimeText(record.attend_datetime || record.created_at);
-        document.getElementById('backToListLink').href = `/admin/list.php?date=${encodeURIComponent(record.attend_date || '')}`;
       })
       .catch(() => {
         showAlert('출석 기록을 불러오는 중 오류가 발생했습니다.');
@@ -380,7 +565,7 @@
         }
 
         toast('비밀번호가 변경되었습니다. 다시 로그인해주세요.');
-        setTimeout(() => redirectLogin('password=changed'), 800);
+        setTimeout(() => redirectLogin('password-change'), 800);
       } catch (error) {
         showAlert('비밀번호 변경 중 오류가 발생했습니다.');
       } finally {
@@ -396,9 +581,9 @@
       try {
         const data = await api('/api/admin-logout.php');
         if (data === null) return;
-        redirectLogin('logout=1');
+        redirectLogin('logout');
       } catch (error) {
-        redirectLogin('logout=1');
+        redirectLogin('logout');
       }
     });
   });

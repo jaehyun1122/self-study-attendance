@@ -4,6 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>관리자 로그인 - <?php echo $h($app->string('app_name')); ?></title>
+  <link rel="icon" type="image/png" href="/assets/logo.png">
+  <link rel="apple-touch-icon" href="/assets/logo.png">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
   <link rel="stylesheet" href="/assets/styles.css">
@@ -12,7 +14,10 @@
   <main class="min-vh-100 d-flex align-items-center justify-content-center p-3">
     <section class="card border-0 shadow-sm w-100 auth-card">
       <div class="card-body p-4">
-        <p class="text-success fw-bold text-uppercase small mb-2">Admin</p>
+        <div class="auth-logo-line">
+          <img class="brand-logo" src="/assets/logo.png" width="24" height="24" alt="" aria-hidden="true">
+          <p class="text-success fw-bold text-uppercase small mb-0">Admin</p>
+        </div>
         <h1 class="h3 mb-2">관리자 로그인</h1>
         <p class="text-secondary">관리자 비밀번호를 입력해주세요.</p>
 

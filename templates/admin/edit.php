@@ -4,26 +4,29 @@
     <h1>출석 기록 수정</h1>
     <p>학생 정보만 수정할 수 있으며 출석일시는 초 단위로 표시됩니다.</p>
   </div>
-  <a class="btn btn-outline-secondary" id="backToListLink" href="/admin/list.php">목록으로</a>
 </div>
 
 <div id="adminAlert"></div>
 
 <section class="admin-card form-card">
+  <?php
+    $studentNoRange = $app->lengthRange('student_no_length', 5, 5);
+    $studentNameRange = $app->lengthRange('student_name_length', 1, 5);
+  ?>
   <form id="editForm">
     <input id="editIdInput" type="hidden">
     <input id="editDateInput" type="hidden">
 
     <div class="mb-3">
       <label class="form-label" for="studentNoInput">학번</label>
-      <input class="form-control form-control-lg" id="studentNoInput" name="student_no" maxlength="<?php echo $h($app->int('student_no_length', 5)); ?>" minlength="<?php echo $h($app->int('student_no_length', 5)); ?>" required>
-      <div class="form-text">학번은 <?php echo $h($app->int('student_no_length', 5)); ?>자로 입력해주세요.</div>
+      <input class="form-control form-control-lg" id="studentNoInput" name="student_no" maxlength="<?php echo $h($studentNoRange['max']); ?>" minlength="<?php echo $h($studentNoRange['min']); ?>" required>
+      <div class="form-text"><?php echo $h($app->lengthRequirementText('학번은', 'student_no_length', 5, 5)); ?></div>
     </div>
 
     <div class="mb-3">
       <label class="form-label" for="nameInput">이름</label>
-      <input class="form-control form-control-lg" id="nameInput" name="name" maxlength="<?php echo $h($app->int('student_name_max_length', 5)); ?>" required>
-      <div class="form-text">이름은 <?php echo $h($app->int('student_name_max_length', 5)); ?>자까지 입력할 수 있습니다.</div>
+      <input class="form-control form-control-lg" id="nameInput" name="name" maxlength="<?php echo $h($studentNameRange['max']); ?>" minlength="<?php echo $h($studentNameRange['min']); ?>" required>
+      <div class="form-text"><?php echo $h($app->lengthRequirementText('이름은', 'student_name_length', 1, 5)); ?></div>
     </div>
 
     <div class="attendance-time-box mb-4">

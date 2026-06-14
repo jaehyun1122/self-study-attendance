@@ -65,6 +65,50 @@ final class Controller
     }
 
     /**
+     * @return array{min: int, max: int}
+     */
+    public function lengthRange(string $key, int $defaultMin, ?int $defaultMax = null): array
+    {
+        $defaultMax ??= $defaultMin;
+        $value = $this->get($key);
+
+        if (is_array($value)) {
+            $minValue = $value['min'] ?? $value[0] ?? $defaultMin;
+            $maxValue = $value['max'] ?? $value[1] ?? $defaultMax;
+        } elseif (is_numeric($value)) {
+            $minValue = $value;
+            $maxValue = $value;
+        } else {
+            $minValue = $defaultMin;
+            $maxValue = $defaultMax;
+        }
+
+        $min = max(0, (int) $minValue);
+        $max = max(0, (int) $maxValue);
+
+        if ($max < $min) {
+            [$min, $max] = [$max, $min];
+        }
+
+        return ['min' => $min, 'max' => $max];
+    }
+
+    public function lengthRequirementText(string $subject, string $key, int $defaultMin, ?int $defaultMax = null): string
+    {
+        $range = $this->lengthRange($key, $defaultMin, $defaultMax);
+
+        if ($range['min'] === $range['max']) {
+            return "{$subject} {$range['min']}자로 입력해주세요.";
+        }
+
+        if ($range['min'] < 1) {
+            return "{$subject} {$range['max']}자까지 입력할 수 있습니다.";
+        }
+
+        return "{$subject} {$range['min']}자 이상 {$range['max']}자까지 입력할 수 있습니다.";
+    }
+
+    /**
      * @return array<int|string, mixed>
      */
     public function array(string $key, array $default = []): array
@@ -297,11 +341,11 @@ final class Controller
         $token = $_COOKIE[$cookieName] ?? null;
 
         if (!is_string($token) || $token === '') {
-            $this->redirect('/admin/?login=required');
+            $this->redirect('/admin/?reason=login-required');
         }
 
         if (!$this->checkAdminToken($token)) {
-            $this->redirect('/admin/?login=expired');
+            $this->redirect('/admin/?reason=session-expired');
         }
 
         if (!$this->isRuntimeReady()) {

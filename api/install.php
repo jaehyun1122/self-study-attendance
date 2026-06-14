@@ -16,10 +16,11 @@ try {
     $app->requireFields($input, ['password']);
 
     $password = trim((string) $input['password']);
-    $minLength = $app->int('password_min_length', 8);
+    $passwordRange = $app->lengthRange('password_length', 4, 64);
+    $passwordLength = $app->textLength($password);
 
-    if (strlen($password) < $minLength) {
-        $app->error("관리자 비밀번호는 {$minLength}자 이상이어야 합니다.", 400);
+    if ($passwordLength < $passwordRange['min'] || $passwordLength > $passwordRange['max']) {
+        $app->error($app->lengthRequirementText('관리자 비밀번호는', 'password_length', 4, 64), 400);
     }
 
     if ($app->checkInstalled()) {

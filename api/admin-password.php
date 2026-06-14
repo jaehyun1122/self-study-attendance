@@ -17,10 +17,11 @@ try {
     $app->requireFields($input, ['old_password', 'new_password']);
 
     $newPassword = trim((string) $input['new_password']);
-    $minLength = $app->int('password_min_length', 8);
+    $passwordRange = $app->lengthRange('password_length', 4, 64);
+    $passwordLength = $app->textLength($newPassword);
 
-    if (strlen($newPassword) < $minLength) {
-        $app->error("새 비밀번호는 {$minLength}자 이상이어야 합니다.", 400);
+    if ($passwordLength < $passwordRange['min'] || $passwordLength > $passwordRange['max']) {
+        $app->error($app->lengthRequirementText('새 비밀번호는', 'password_length', 4, 64), 400);
     }
 
     $admin = $app->pdo()->query('SELECT id, password_hash FROM admin ORDER BY id ASC LIMIT 1')->fetch();

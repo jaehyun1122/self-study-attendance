@@ -57,15 +57,17 @@ try {
         $app->error('학번과 이름을 입력해주세요.', 400);
     }
 
-    $studentNoLength = $app->int('student_no_length', 5);
-    $studentNameMaxLength = $app->int('student_name_max_length', 5);
+    $studentNoRange = $app->lengthRange('student_no_length', 5, 5);
+    $studentNameRange = $app->lengthRange('student_name_length', 1, 5);
+    $studentNoLength = $app->textLength($studentNo);
+    $studentNameLength = $app->textLength($name);
 
-    if ($app->textLength($studentNo) !== $studentNoLength) {
-        $app->error("학번은 {$studentNoLength}자여야 합니다.", 400);
+    if ($studentNoLength < $studentNoRange['min'] || $studentNoLength > $studentNoRange['max']) {
+        $app->error($app->lengthRequirementText('학번은', 'student_no_length', 5, 5), 400);
     }
 
-    if ($app->textLength($name) > $studentNameMaxLength) {
-        $app->error("이름은 {$studentNameMaxLength}자까지 입력할 수 있습니다.", 400);
+    if ($studentNameLength < $studentNameRange['min'] || $studentNameLength > $studentNameRange['max']) {
+        $app->error($app->lengthRequirementText('이름은', 'student_name_length', 1, 5), 400);
     }
 
     $statement = $app->pdo()->prepare('UPDATE attendance SET student_no = :student_no, name = :name WHERE id = :id');

@@ -1,6 +1,6 @@
 (function () {
   const STORAGE_KEY = 'attendance_student';
-  const RESYNC_INTERVAL_MS = 60 * 1000;
+  const DEFAULT_SYNC_INTERVAL_MS = 5000;
 
   const els = {
     studentFormView: document.getElementById('studentFormView'),
@@ -29,6 +29,8 @@
   let serverTime = null;
   let serverTimeTimer = null;
   let statusInfo = null;
+  let statusSyncTimer = null;
+  let statusSyncIntervalMs = DEFAULT_SYNC_INTERVAL_MS;
 
   function toast(message, type = 'success') {
     if (window.Toastify) {
@@ -80,21 +82,41 @@
     return Array.from(String(value || '')).length;
   }
 
-  function validateStudentInfo(studentNo, name) {
-    const studentNoLength = Number(els.studentNoInput.getAttribute('maxlength') || 5);
-    const studentNameMaxLength = Number(els.studentNameInput.getAttribute('maxlength') || 5);
+  function inputRange(input, fallbackMin, fallbackMax) {
+    const min = Number(input?.getAttribute('minlength') || fallbackMin);
+    const max = Number(input?.getAttribute('maxlength') || fallbackMax);
+    return {
+      min: Number.isFinite(min) ? min : fallbackMin,
+      max: Number.isFinite(max) ? max : fallbackMax,
+    };
+  }
 
-    if (textLength(studentNo) !== studentNoLength) {
-      toast(`학번은 ${studentNoLength}자로 입력해주세요.`, 'error');
-      return false;
+  function lengthMessage(subject, range) {
+    if (range.min === range.max) {
+      return `${subject} ${range.min}자로 입력해주세요.`;
     }
 
-    if (textLength(name) > studentNameMaxLength) {
-      toast(`이름은 ${studentNameMaxLength}자까지 입력할 수 있습니다.`, 'error');
+    if (range.min < 1) {
+      return `${subject} ${range.max}자까지 입력할 수 있습니다.`;
+    }
+
+    return `${subject} ${range.min}자 이상 ${range.max}자까지 입력할 수 있습니다.`;
+  }
+
+  function validateLength(value, subject, range) {
+    const length = textLength(value);
+
+    if (length < range.min || length > range.max) {
+      toast(lengthMessage(subject, range), 'error');
       return false;
     }
 
     return true;
+  }
+
+  function validateStudentInfo(studentNo, name) {
+    return validateLength(studentNo, '학번은', inputRange(els.studentNoInput, 5, 5))
+      && validateLength(name, '이름은', inputRange(els.studentNameInput, 1, 5));
   }
 
   function fillStudentForm(student) {
@@ -143,19 +165,47 @@
       const data = await api('/api/status.php', { method: 'GET' });
       statusInfo = data.result || null;
 
-      if (statusInfo && statusInfo.server_time) {
-        serverTime = parseServerTime(statusInfo.server_time);
-        startServerClock();
+      if (statusInfo?.server_time) {
+        syncServerTime(statusInfo.server_time);
+      }
+
+      scheduleStatusSync(statusInfo);
+
+      if (isInfoModalOpen()) {
+        renderInfo();
       }
 
       if (data.status !== 1 && showError) {
         toast(data.msg || '상태 확인에 실패했습니다.', 'error');
       }
     } catch (error) {
+      scheduleStatusSync();
+
       if (showError) {
         toast('서버 상태를 확인할 수 없습니다.', 'error');
       }
     }
+  }
+
+  function syncIntervalMs(info = null) {
+    const seconds = Number(info?.server_time_sync_interval_seconds || 5);
+    return Math.max(1, seconds) * 1000;
+  }
+
+  function scheduleStatusSync(info = null) {
+    const nextIntervalMs = syncIntervalMs(info);
+
+    if (statusSyncTimer && nextIntervalMs === statusSyncIntervalMs) {
+      return;
+    }
+
+    statusSyncIntervalMs = nextIntervalMs;
+
+    if (statusSyncTimer) {
+      clearInterval(statusSyncTimer);
+    }
+
+    statusSyncTimer = setInterval(() => loadStatus(false), statusSyncIntervalMs);
   }
 
   function parseServerTime(value) {
@@ -175,11 +225,15 @@
     );
   }
 
-  function startServerClock() {
+  function syncServerTime(value) {
+    serverTime = parseServerTime(value);
     updateServerTimeText();
+    startServerClock();
+  }
 
+  function startServerClock() {
     if (serverTimeTimer) {
-      clearInterval(serverTimeTimer);
+      return;
     }
 
     serverTimeTimer = setInterval(() => {
@@ -195,10 +249,28 @@
   function updateServerTimeText() {
     if (!serverTime) {
       els.serverTime.textContent = '현재시간: 불러오는 중...';
+      updateInfoServerTimeText();
       return;
     }
 
     els.serverTime.textContent = `현재시간: ${formatDateTime(serverTime)}`;
+    updateInfoServerTimeText();
+  }
+
+  function currentServerTimeText() {
+    if (serverTime) {
+      return formatDateTime(serverTime);
+    }
+
+    return formatDateTimeText(statusInfo?.server_time || '') || '-';
+  }
+
+  function updateInfoServerTimeText() {
+    const infoServerTime = els.infoList.querySelector('[data-info-server-time]');
+
+    if (infoServerTime) {
+      infoServerTime.textContent = currentServerTimeText();
+    }
   }
 
   function formatDateTime(date) {
@@ -232,11 +304,15 @@
 
   function showResult(kind, title, message, result) {
     const student = getStudentInfo();
-    const className = kind === 'success' ? 'result-card success' : `result-card ${kind}`;
     const resultTime = result?.attend_datetime || result?.attend_time || result?.attend_date || '';
+    const icons = {
+      success: '✓',
+      duplicate: '!',
+      error: '!',
+    };
 
-    els.resultCard.className = className;
-    els.resultIcon.textContent = kind === 'success' ? '✓' : '!';
+    els.resultCard.className = `result-card ${kind}`;
+    els.resultIcon.textContent = icons[kind] || '!';
     els.resultTitle.textContent = title;
     els.resultStudent.textContent = student ? `${student.student_no} ${student.name}` : '';
     els.resultTime.textContent = formatDateTimeText(resultTime);
@@ -278,14 +354,42 @@
     }
 
     els.infoList.innerHTML = [
-      ['서비스명', info.app_name],
-      ['버전', info.version],
-      ['API 상태', info.api_status === 'ok' ? '정상' : '확인 필요'],
-      ['설치 여부', info.installed ? '설치됨' : '설치 필요'],
-      ['시간대', info.timezone],
-      ['서버시간', formatDateTimeText(info.server_time)],
-      ['PHP', `${info.php?.current || '-'} / 필요 ${info.php?.required || '8.5.0'}`],
-    ].map(([label, value]) => `<div><dt>${label}</dt><dd>${escapeHtml(String(value ?? '-'))}</dd></div>`).join('');
+      { label: '서비스명', value: info.app_name },
+      { label: '버전', value: info.version },
+      { label: 'GitHub', value: repositoryLink(info.repository_url, info.powered_by) },
+      { label: 'API 상태', value: info.api_status === 'ok' ? '정상' : '확인 필요' },
+      { label: '설치 여부', value: info.installed ? '설치됨' : '설치 필요' },
+      { label: '시간대', value: info.timezone },
+      { label: '서버시간', value: currentServerTimeText(), attr: 'data-info-server-time' },
+      { label: '보정 주기', value: `${Number(info.server_time_sync_interval_seconds || 5)}초` },
+      { label: 'PHP', value: `${info.php?.current || '-'} / 필요 ${info.php?.required || '8.5.0'}` },
+    ].map(({ label, value, attr = '' }) => {
+      const html = value instanceof SafeHtml ? value.html : escapeHtml(String(value ?? '-'));
+      return `<div><dt>${escapeHtml(label)}</dt><dd${attr ? ` ${attr}` : ''}>${html}</dd></div>`;
+    }).join('');
+
+    updateInfoServerTimeText();
+  }
+
+  function isInfoModalOpen() {
+    return els.infoModal.classList.contains('show') || els.infoModal.style.display === 'block';
+  }
+
+  class SafeHtml {
+    constructor(html) {
+      this.html = html;
+    }
+  }
+
+  function repositoryLink(value, labelValue = '') {
+    const url = String(value || '').trim();
+    const label = String(labelValue || 'jaehyun1122 / self-study-attendance').trim();
+
+    if (!/^https:\/\/github\.com\/[-A-Za-z0-9_.]+\/[-A-Za-z0-9_.]+\/?$/.test(url)) {
+      return '-';
+    }
+
+    return new SafeHtml(`<a class="info-link" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(label)}</a>`);
   }
 
   function escapeHtml(value) {
@@ -337,7 +441,7 @@
     }
 
     els.attendButton.disabled = true;
-    els.attendButton.textContent = '처리 중...';
+    els.attendButton.innerHTML = '<i class="bi bi-hourglass-split me-1"></i> 처리 중...';
 
     try {
       const data = await api('/api/attend.php', {
@@ -358,7 +462,7 @@
       toast('네트워크 오류가 발생했습니다.', 'error');
     } finally {
       els.attendButton.disabled = false;
-      els.attendButton.textContent = '출석하기';
+      els.attendButton.innerHTML = '<i class="bi bi-check2-circle me-1"></i> 출석하기';
     }
   });
 
@@ -378,7 +482,7 @@
     }
   });
 
+  scheduleStatusSync();
   loadStatus(false);
-  setInterval(() => loadStatus(false), RESYNC_INTERVAL_MS);
   render();
 })();

@@ -7,6 +7,7 @@
 </div>
 
 <section class="admin-card form-card">
+  <?php $passwordRange = $app->lengthRange('password_length', 4, 64); ?>
   <div id="adminAlert"></div>
 
   <form id="passwordForm">
@@ -16,8 +17,8 @@
     </div>
     <div class="mb-4">
       <label class="form-label" for="newPasswordInput">새 비밀번호</label>
-      <input class="form-control form-control-lg" id="newPasswordInput" name="new_password" type="password" autocomplete="new-password" minlength="<?php echo $h($app->int('password_min_length', 8)); ?>" required>
-      <div class="form-text"><?php echo $h($app->int('password_min_length', 8)); ?>자 이상으로 입력해주세요.</div>
+      <input class="form-control form-control-lg" id="newPasswordInput" name="new_password" type="password" autocomplete="new-password" minlength="<?php echo $h($passwordRange['min']); ?>" maxlength="<?php echo $h($passwordRange['max']); ?>" required>
+      <div class="form-text"><?php echo $h($app->lengthRequirementText('새 비밀번호는', 'password_length', 4, 64)); ?></div>
     </div>
     <button class="btn btn-success btn-lg w-100" id="changePasswordButton" type="submit">비밀번호 변경</button>
   </form>
