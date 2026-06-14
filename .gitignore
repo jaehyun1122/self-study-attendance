@@ -1,0 +1,5 @@
+data/database.sqlite
+data/*.sqlite
+data/*.sqlite-journal
+data/*.db
+*.log
