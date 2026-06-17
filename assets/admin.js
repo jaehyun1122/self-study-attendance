@@ -1541,7 +1541,7 @@
         await wait(500);
         await openAdminDialog({
           title: '업데이트 완료',
-          message: `${installedVersion} 업데이트 완료\n백업 ${backupPath}`,
+          message: `${installedVersion} 업데이트 완료\n백업경로: ${backupPath}`,
           confirmText: '확인',
           confirmClass: 'btn-success',
           type: 'info',
