@@ -81,7 +81,7 @@
 
       <div class="system-actions">
         <button class="btn btn-success" id="updateInstallButton" type="submit">
-          <i class="bi bi-download me-1"></i> 다운로드 후 업그레이드
+          <i class="bi bi-download me-1"></i> 업그레이드
         </button>
       </div>
     </form>
