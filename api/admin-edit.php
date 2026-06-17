@@ -14,18 +14,41 @@ try {
     $app->requireAdminApi();
 
     $input = $app->jsonInput();
-    $app->requireFields($input, ['type', 'id']);
+    $type = (string) ($input['type'] ?? '');
 
-    $type = (string) $input['type'];
-    $id = (int) $input['id'];
-
-    if ($id < 1) {
-        $app->error('올바른 출석 기록을 선택해주세요.', 400);
+    if ($type === '') {
+        $app->error('수정 유형을 선택해주세요.', 400);
     }
 
-    if ($type === 'get') {
+    $idFromInput = static function (array $input) use ($app): int {
+        $id = (int) ($input['id'] ?? 0);
+
+        if ($id < 1) {
+            $app->error('올바른 출석 기록을 선택해주세요.', 400);
+        }
+
+        return $id;
+    };
+
+    $recordById = static function (int $id) use ($app): array {
         $statement = $app->pdo()->prepare(
-            'SELECT id, student_no, name, attend_date, created_at, created_at AS attend_datetime FROM attendance WHERE id = :id'
+            'SELECT
+                id,
+                student_no,
+                name,
+                attend_date,
+                created_at,
+                created_at AS attend_datetime,
+                location_status,
+                location_latitude,
+                location_longitude,
+                location_accuracy,
+                location_distance_meters,
+                location_message,
+                location_checked_at,
+                location_approved_at
+            FROM attendance
+            WHERE id = :id'
         );
         $statement->execute([':id' => $id]);
         $record = $statement->fetch();
@@ -34,6 +57,59 @@ try {
             $app->error('출석 기록을 찾을 수 없습니다.', 404);
         }
 
+        return $record;
+    };
+
+    $normalizeDateTime = static function (mixed $value, string $label) use ($app): string {
+        $text = trim(str_replace('T', ' ', (string) $value));
+
+        if ($text === '') {
+            $app->error("{$label}을 입력해주세요.", 400);
+        }
+
+        if (preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/', $text)) {
+            $text .= ':00';
+        }
+
+        if (!preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/', $text)) {
+            $app->error("{$label} 형식은 YYYY-MM-DD HH:mm:ss이어야 합니다.", 400);
+        }
+
+        $timestamp = strtotime($text);
+
+        if ($timestamp === false) {
+            $app->error("{$label}이 올바르지 않습니다.", 400);
+        }
+
+        return date('Y-m-d H:i:s', $timestamp);
+    };
+
+    $nullableDateTime = static function (array $input, string $key, mixed $default) use ($normalizeDateTime): ?string {
+        if (!array_key_exists($key, $input)) {
+            return $default === null ? null : (string) $default;
+        }
+
+        $value = trim((string) $input[$key]);
+
+        return $value === '' ? null : $normalizeDateTime($value, '위치 시각');
+    };
+
+    $nullableFloat = static function (array $input, string $key, mixed $default): ?float {
+        if (!array_key_exists($key, $input)) {
+            return is_numeric($default) ? (float) $default : null;
+        }
+
+        $value = trim((string) $input[$key]);
+
+        return $value === '' || !is_numeric($value) ? null : (float) $value;
+    };
+
+    $verifyAdminPassword = static function (mixed $password) use ($app): void {
+        $app->verifyAdminPassword($password, 403);
+    };
+
+    if ($type === 'get') {
+        $record = $recordById($idFromInput($input));
         $record['attend_datetime'] = $app->formatDateTime($record['created_at'] ?? $record['attend_datetime'] ?? null);
 
         $app->success('성공적으로 처리되었습니다.', $record);
@@ -41,41 +117,172 @@ try {
 
     if ($type === 'delete') {
         $statement = $app->pdo()->prepare('DELETE FROM attendance WHERE id = :id');
-        $statement->execute([':id' => $id]);
+        $statement->execute([':id' => $idFromInput($input)]);
         $app->success('삭제되었습니다.');
+    }
+
+    if ($type === 'bulk_delete') {
+        $ids = array_values(array_unique(array_filter(array_map(
+            static fn (mixed $value): int => (int) $value,
+            is_array($input['ids'] ?? null) ? $input['ids'] : []
+        ), static fn (int $value): bool => $value > 0)));
+
+        if (count($ids) < 1) {
+            $app->error('삭제할 출석 기록을 선택해주세요.', 400);
+        }
+
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+        $statement = $app->pdo()->prepare("DELETE FROM attendance WHERE id IN ({$placeholders})");
+        $statement->execute($ids);
+
+        $app->success('선택한 출석 기록이 삭제되었습니다.', ['deleted' => $statement->rowCount()]);
+    }
+
+    if ($type === 'reset_attendance') {
+        $verifyAdminPassword($input['password'] ?? '');
+
+        $pdo = $app->pdo();
+        $pdo->beginTransaction();
+
+        try {
+            $deleted = $pdo->exec('DELETE FROM attendance');
+            $hasSequence = (int) $pdo
+                ->query("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'sqlite_sequence'")
+                ->fetchColumn();
+
+            if ($hasSequence > 0) {
+                $pdo->exec("DELETE FROM sqlite_sequence WHERE name = 'attendance'");
+            }
+
+            $pdo->commit();
+        } catch (Throwable $exception) {
+            $pdo->rollBack();
+            throw $exception;
+        }
+
+        $app->success('출석 기록이 초기화되었습니다.', ['deleted' => (int) $deleted]);
+    }
+
+    if ($type === 'approve_location') {
+        $statement = $app->pdo()->prepare(
+            "UPDATE attendance
+            SET location_status = 'approved',
+                location_approved_at = :location_approved_at,
+                location_message = :location_message
+            WHERE id = :id AND location_status = 'pending'"
+        );
+        $statement->execute([
+            ':id' => $idFromInput($input),
+            ':location_approved_at' => $app->now(),
+            ':location_message' => '관리자 승인 완료',
+        ]);
+
+        if ($statement->rowCount() < 1) {
+            $app->error('관리자 승인 대기 중인 출석 기록을 찾을 수 없습니다.', 404);
+        }
+
+        $app->success('위치 인증을 승인했습니다.');
+    }
+
+    if ($type === 'reject_location') {
+        $statement = $app->pdo()->prepare(
+            "UPDATE attendance
+            SET location_status = 'rejected',
+                location_approved_at = :location_approved_at,
+                location_message = :location_message
+            WHERE id = :id AND location_status = 'pending'"
+        );
+        $statement->execute([
+            ':id' => $idFromInput($input),
+            ':location_approved_at' => $app->now(),
+            ':location_message' => '위치 인증이 관리자에 의해 반려되었습니다.',
+        ]);
+
+        if ($statement->rowCount() < 1) {
+            $app->error('관리자 승인 대기 중인 출석 기록을 찾을 수 없습니다.', 404);
+        }
+
+        $app->success('위치 인증을 반려했습니다.');
     }
 
     if ($type !== 'update') {
         $app->error('지원하지 않는 수정 유형입니다.', 400);
     }
 
-    $app->requireFields($input, ['student_no', 'name']);
-    $studentNo = trim(preg_replace('/\s+/', '', (string) $input['student_no']) ?? '');
-    $name = trim(preg_replace('/\s+/', ' ', (string) $input['name']) ?? '');
+    $id = $idFromInput($input);
+    $existing = $recordById($id);
+    $student = $app->validatedStudentInput($input);
+    $studentNo = $student['student_no'];
+    $name = $student['name'];
+    $createdAt = $normalizeDateTime($input['created_at'] ?? ($input['attend_datetime'] ?? $existing['created_at']), '출석일시');
+    $attendDate = substr($createdAt, 0, 10);
+    $statusOptions = ['unchecked', 'verified', 'pending', 'approved', 'rejected'];
+    $locationStatus = (string) ($input['location_status'] ?? ($existing['location_status'] ?? 'unchecked'));
 
-    if ($studentNo === '' || $name === '') {
-        $app->error('학번과 이름을 입력해주세요.', 400);
+    if (!in_array($locationStatus, $statusOptions, true)) {
+        $app->error('지원하지 않는 위치 인증 상태입니다.', 400);
     }
 
-    $studentNoRange = $app->lengthRange('student_no_length', 5, 5);
-    $studentNameRange = $app->lengthRange('student_name_length', 1, 5);
-    $studentNoLength = $app->textLength($studentNo);
-    $studentNameLength = $app->textLength($name);
+    $locationLatitude = $nullableFloat($input, 'location_latitude', $existing['location_latitude'] ?? null);
+    $locationLongitude = $nullableFloat($input, 'location_longitude', $existing['location_longitude'] ?? null);
+    $locationAccuracy = $nullableFloat($input, 'location_accuracy', $existing['location_accuracy'] ?? null);
+    $locationDistanceMeters = $nullableFloat($input, 'location_distance_meters', $existing['location_distance_meters'] ?? null);
 
-    if ($studentNoLength < $studentNoRange['min'] || $studentNoLength > $studentNoRange['max']) {
-        $app->error($app->lengthRequirementText('학번은', 'student_no_length', 5, 5), 400);
+    if ($locationLatitude !== null && ($locationLatitude < -90 || $locationLatitude > 90)) {
+        $app->error('위도는 -90에서 90 사이여야 합니다.', 400);
     }
 
-    if ($studentNameLength < $studentNameRange['min'] || $studentNameLength > $studentNameRange['max']) {
-        $app->error($app->lengthRequirementText('이름은', 'student_name_length', 1, 5), 400);
+    if ($locationLongitude !== null && ($locationLongitude < -180 || $locationLongitude > 180)) {
+        $app->error('경도는 -180에서 180 사이여야 합니다.', 400);
     }
 
-    $statement = $app->pdo()->prepare('UPDATE attendance SET student_no = :student_no, name = :name WHERE id = :id');
+    if ($locationAccuracy !== null && $locationAccuracy < 0) {
+        $app->error('위치 정확도는 0 이상이어야 합니다.', 400);
+    }
+
+    if ($locationDistanceMeters !== null && $locationDistanceMeters < 0) {
+        $app->error('거리 정보는 0 이상이어야 합니다.', 400);
+    }
+
+    $locationMessage = array_key_exists('location_message', $input)
+        ? trim((string) $input['location_message'])
+        : ($existing['location_message'] ?? null);
+    $locationMessage = $locationMessage === '' ? null : $locationMessage;
+
+    $locationCheckedAt = $nullableDateTime($input, 'location_checked_at', $existing['location_checked_at'] ?? null);
+    $locationApprovedAt = $nullableDateTime($input, 'location_approved_at', $existing['location_approved_at'] ?? null);
+
+    $statement = $app->pdo()->prepare(
+        'UPDATE attendance
+        SET student_no = :student_no,
+            name = :name,
+            attend_date = :attend_date,
+            created_at = :created_at,
+            location_status = :location_status,
+            location_latitude = :location_latitude,
+            location_longitude = :location_longitude,
+            location_accuracy = :location_accuracy,
+            location_distance_meters = :location_distance_meters,
+            location_message = :location_message,
+            location_checked_at = :location_checked_at,
+            location_approved_at = :location_approved_at
+        WHERE id = :id'
+    );
 
     try {
         $statement->execute([
             ':student_no' => $studentNo,
             ':name' => $name,
+            ':attend_date' => $attendDate,
+            ':created_at' => $createdAt,
+            ':location_status' => $locationStatus,
+            ':location_latitude' => $locationLatitude,
+            ':location_longitude' => $locationLongitude,
+            ':location_accuracy' => $locationAccuracy,
+            ':location_distance_meters' => $locationDistanceMeters,
+            ':location_message' => $locationMessage,
+            ':location_checked_at' => $locationCheckedAt,
+            ':location_approved_at' => $locationApprovedAt,
             ':id' => $id,
         ]);
     } catch (PDOException $exception) {
@@ -86,7 +293,10 @@ try {
         throw $exception;
     }
 
-    $app->success('저장되었습니다.');
+    $app->success('저장되었습니다.', [
+        'attend_date' => $attendDate,
+        'created_at' => $createdAt,
+    ]);
 } catch (Throwable $exception) {
     $app->error('출석 기록 저장 중 오류가 발생했습니다.', 500, ['detail' => $exception->getMessage()]);
 }

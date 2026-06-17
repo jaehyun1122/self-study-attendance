@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.css">
   <link rel="stylesheet" href="/assets/styles.css">
 </head>
 <body class="bg-body-tertiary">
@@ -31,6 +32,10 @@
             </li>
           <?php endforeach; ?>
         </ul>
+        <div class="admin-developer-meta d-lg-none">
+          <span>개발자: <a href="<?php echo $h($app->string('repository_url')); ?>" target="_blank" rel="noopener noreferrer"><?php echo $h($app->string('powered_by')); ?></a></span>
+          <span>현재 버전 <?php echo $h($app->string('app_version')); ?></span>
+        </div>
         <button class="btn btn-outline-secondary btn-sm js-logout-button" type="button">로그아웃</button>
       </div>
     </div>
@@ -48,15 +53,23 @@
             <a class="admin-menu-link <?php echo ($active ?? '') === $item['key'] ? 'is-active' : ''; ?>" href="<?php echo $h($item['url']); ?>">
               <?php if ($item['key'] === 'dash'): ?><i class="bi bi-speedometer2"></i><?php endif; ?>
               <?php if ($item['key'] === 'list'): ?><i class="bi bi-table"></i><?php endif; ?>
+              <?php if ($item['key'] === 'location'): ?><i class="bi bi-geo-alt"></i><?php endif; ?>
+              <?php if ($item['key'] === 'system'): ?><i class="bi bi-tools"></i><?php endif; ?>
               <?php if ($item['key'] === 'password'): ?><i class="bi bi-shield-lock"></i><?php endif; ?>
               <span><?php echo $h($item['label']); ?></span>
             </a>
           <?php endforeach; ?>
         </nav>
       </div>
-      <button class="btn btn-outline-secondary w-100 js-logout-button" type="button">
-        <i class="bi bi-box-arrow-right me-1"></i> 로그아웃
-      </button>
+      <div class="admin-sidebar-footer">
+        <div class="admin-developer-meta">
+          <span>개발자: <a href="<?php echo $h($app->string('repository_url')); ?>" target="_blank" rel="noopener noreferrer"><?php echo $h($app->string('powered_by')); ?></a></span>
+          <span>현재 버전 <?php echo $h($app->string('app_version')); ?></span>
+        </div>
+        <button class="btn btn-outline-secondary w-100 js-logout-button" type="button">
+          <i class="bi bi-box-arrow-right me-1"></i> 로그아웃
+        </button>
+      </div>
     </aside>
 
     <main class="admin-content">
@@ -68,6 +81,7 @@
   <script>window.ADMIN_TOKEN = <?php echo json_encode($adminToken ?? null, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT); ?>;</script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.js"></script>
   <script src="/assets/admin.js"></script>
 </body>
 </html>

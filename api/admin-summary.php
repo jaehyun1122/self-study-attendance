@@ -13,12 +13,19 @@ try {
     $app->requireMethod('POST');
     $app->requireAdminApi();
 
-    $todayStatement = $app->pdo()->prepare('SELECT COUNT(*) FROM attendance WHERE attend_date = :attend_date');
+    $countedStatuses = "('verified', 'approved', 'unchecked')";
+    $todayStatement = $app->pdo()->prepare(
+        "SELECT COUNT(*) FROM attendance WHERE attend_date = :attend_date AND location_status IN {$countedStatuses}"
+    );
     $todayStatement->execute([':attend_date' => $app->today()]);
+    $totalStatement = $app->pdo()->query("SELECT COUNT(*) FROM attendance WHERE location_status IN {$countedStatuses}");
+    $pendingStatement = $app->pdo()->query("SELECT COUNT(*) FROM attendance WHERE location_status = 'pending'");
 
     $app->success('성공적으로 처리되었습니다.', [
         'today' => (int) $todayStatement->fetchColumn(),
-        'total' => (int) $app->pdo()->query('SELECT COUNT(*) FROM attendance')->fetchColumn(),
+        'total' => (int) $totalStatement->fetchColumn(),
+        'pending' => (int) $pendingStatement->fetchColumn(),
+        'location' => $app->locationSettings(),
         'server_time' => $app->now(),
         'server_time_sync_interval_seconds' => $app->int('server_time_sync_interval_seconds', 5),
     ]);

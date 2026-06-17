@@ -19,6 +19,8 @@ final class Controller
 
     private Database $database;
 
+    private bool $schemaReady = false;
+
     public function __construct()
     {
         $config = require __DIR__ . '/../data/config.php';
@@ -118,6 +120,145 @@ final class Controller
         return is_array($value) ? $value : $default;
     }
 
+    public function bool(string $key, bool $default = false): bool
+    {
+        $value = $this->get($key, $default);
+
+        if (is_bool($value)) {
+            return $value;
+        }
+
+        if (is_scalar($value)) {
+            return filter_var($value, FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE) ?? $default;
+        }
+
+        return $default;
+    }
+
+    public function float(string $key, float $default = 0.0): float
+    {
+        $value = $this->get($key, $default);
+
+        return is_numeric($value) ? (float) $value : $default;
+    }
+
+    public function setting(string $key, mixed $default = null): mixed
+    {
+        try {
+            $this->migrateInstalledDatabase();
+            $statement = $this->pdo()->prepare('SELECT setting_value FROM app_settings WHERE setting_key = :setting_key');
+            $statement->execute([':setting_key' => $key]);
+            $value = $statement->fetchColumn();
+
+            if (!is_string($value)) {
+                return $default;
+            }
+
+            $decoded = json_decode($value, true);
+
+            return json_last_error() === JSON_ERROR_NONE ? $decoded : $default;
+        } catch (Throwable) {
+            return $default;
+        }
+    }
+
+    public function saveSetting(string $key, mixed $value): void
+    {
+        $this->migrateInstalledDatabase();
+        $now = $this->now();
+        $encoded = json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+        if (!is_string($encoded)) {
+            throw new \RuntimeException('설정값을 저장할 수 없습니다.');
+        }
+
+        $statement = $this->pdo()->prepare(
+            'INSERT OR REPLACE INTO app_settings (setting_key, setting_value, updated_at) VALUES (:setting_key, :setting_value, :updated_at)'
+        );
+        $statement->execute([
+            ':setting_key' => $key,
+            ':setting_value' => $encoded,
+            ':updated_at' => $now,
+        ]);
+    }
+
+    public function deleteSetting(string $key): void
+    {
+        $this->migrateInstalledDatabase();
+        $statement = $this->pdo()->prepare('DELETE FROM app_settings WHERE setting_key = :setting_key');
+        $statement->execute([':setting_key' => $key]);
+    }
+
+    /**
+     * @return array{enabled: bool, latitude: ?float, longitude: ?float, radius_meters: ?int, timeout_seconds: ?int, configured: bool}
+     */
+    public function locationSettings(): array
+    {
+        $defaults = $this->array('attendance_location', []);
+        $saved = $this->setting('attendance_location', []);
+        $settings = array_merge($defaults, is_array($saved) ? $saved : []);
+        $latitude = is_numeric($settings['latitude'] ?? null) ? (float) $settings['latitude'] : null;
+        $longitude = is_numeric($settings['longitude'] ?? null) ? (float) $settings['longitude'] : null;
+        $radiusMeters = is_numeric($settings['radius_meters'] ?? null)
+            ? min(5000, max(10, (int) $settings['radius_meters']))
+            : null;
+        $timeoutSeconds = is_numeric($settings['timeout_seconds'] ?? null)
+            ? min(60, max(3, (int) $settings['timeout_seconds']))
+            : null;
+        $enabled = filter_var($settings['enabled'] ?? false, FILTER_VALIDATE_BOOL);
+
+        return [
+            'enabled' => $enabled,
+            'latitude' => $latitude,
+            'longitude' => $longitude,
+            'radius_meters' => $radiusMeters,
+            'timeout_seconds' => $timeoutSeconds,
+            'configured' => $enabled && $latitude !== null && $longitude !== null && $radiusMeters !== null,
+        ];
+    }
+
+    /**
+     * @return array{enabled: bool, latitude: ?float, longitude: ?float, radius_meters: ?int, timeout_seconds: ?int}
+     */
+    public function normalizedLocationSettingPayload(array $settings): array
+    {
+        $latitude = is_numeric($settings['latitude'] ?? null) ? (float) $settings['latitude'] : null;
+        $longitude = is_numeric($settings['longitude'] ?? null) ? (float) $settings['longitude'] : null;
+        $radiusMeters = is_numeric($settings['radius_meters'] ?? null)
+            ? min(5000, max(10, (int) $settings['radius_meters']))
+            : null;
+        $timeoutSeconds = is_numeric($settings['timeout_seconds'] ?? null)
+            ? min(60, max(3, (int) $settings['timeout_seconds']))
+            : null;
+
+        return [
+            'enabled' => filter_var($settings['enabled'] ?? false, FILTER_VALIDATE_BOOL),
+            'latitude' => $latitude,
+            'longitude' => $longitude,
+            'radius_meters' => $radiusMeters,
+            'timeout_seconds' => $timeoutSeconds,
+        ];
+    }
+
+    public function isDefaultLocationSettingPayload(array $settings): bool
+    {
+        return $this->normalizedLocationSettingPayload($settings)
+            === $this->normalizedLocationSettingPayload($this->array('attendance_location', []));
+    }
+
+    public function distanceMeters(float $fromLatitude, float $fromLongitude, float $toLatitude, float $toLongitude): float
+    {
+        $earthRadiusMeters = 6371000;
+        $fromLatRad = deg2rad($fromLatitude);
+        $toLatRad = deg2rad($toLatitude);
+        $deltaLat = deg2rad($toLatitude - $fromLatitude);
+        $deltaLng = deg2rad($toLongitude - $fromLongitude);
+        $a = sin($deltaLat / 2) ** 2
+            + cos($fromLatRad) * cos($toLatRad) * sin($deltaLng / 2) ** 2;
+
+        return $earthRadiusMeters * 2 * atan2(sqrt($a), sqrt(1 - $a));
+    }
+
     public function pdo(): PDO
     {
         return $this->database->pdo();
@@ -155,7 +296,63 @@ final class Controller
             return 0;
         }
 
-        return preg_match_all('/./us', $value, $matches) ?: strlen($value);
+        if (function_exists('grapheme_strlen')) {
+            $length = grapheme_strlen($value);
+
+            if ($length !== false) {
+                return $length;
+            }
+        }
+
+        $graphemeCount = preg_match_all('/\X/u', $value, $matches);
+
+        if ($graphemeCount !== false) {
+            return $graphemeCount;
+        }
+
+        if (function_exists('mb_strlen')) {
+            return mb_strlen($value, 'UTF-8');
+        }
+
+        return strlen($value);
+    }
+
+    /**
+     * @param array<string, mixed> $input
+     * @return array{student_no: string, name: string}
+     */
+    public function validatedStudentInput(array $input): array
+    {
+        $this->requireFields($input, ['student_no', 'name']);
+
+        $studentNo = trim((string) ($input['student_no'] ?? ''));
+        $name = trim((string) ($input['name'] ?? ''));
+        $studentNoRange = $this->lengthRange('student_no_length', 5, 5);
+        $studentNoLength = strlen($studentNo);
+
+        if (!preg_match('/^\d+$/', $studentNo)) {
+            $this->error('학번은 숫자만 입력해주세요.', 400);
+        }
+
+        if ($studentNoLength < $studentNoRange['min'] || $studentNoLength > $studentNoRange['max']) {
+            $this->error($this->lengthRequirementText('학번은', 'student_no_length', 5, 5), 400);
+        }
+
+        if ($name === '') {
+            $this->error('학번과 이름을 입력해주세요.', 400);
+        }
+
+        $studentNameRange = $this->lengthRange('student_name_length', 1, 10);
+        $studentNameLength = $this->textLength($name);
+
+        if ($studentNameLength < $studentNameRange['min'] || $studentNameLength > $studentNameRange['max']) {
+            $this->error($this->lengthRequirementText('이름은', 'student_name_length', 1, 10), 400);
+        }
+
+        return [
+            'student_no' => $studentNo,
+            'name' => $name,
+        ];
     }
 
     public function today(): string
@@ -230,19 +427,12 @@ final class Controller
 
     public function isRuntimeReady(): bool
     {
-        return version_compare(PHP_VERSION, $this->string('min_php_version', '8.5.0'), '>=');
+        return true;
     }
 
     public function assertRuntimeForApi(): void
     {
-        if ($this->isRuntimeReady()) {
-            return;
-        }
-
-        $this->error('PHP 8.5 이상이 필요합니다.', 500, [
-            'required_php_version' => $this->string('min_php_version', '8.5.0'),
-            'current_php_version' => PHP_VERSION,
-        ]);
+        return;
     }
 
     public function checkInstalled(): bool
@@ -260,6 +450,8 @@ final class Controller
             if ((int) $statement->fetchColumn() !== count($tables)) {
                 return false;
             }
+
+            $this->migrateInstalledDatabase();
 
             return (int) $this->pdo()->query('SELECT COUNT(*) FROM admin')->fetchColumn() > 0;
         } catch (Throwable) {
@@ -348,10 +540,6 @@ final class Controller
             $this->redirect('/admin/?reason=session-expired');
         }
 
-        if (!$this->isRuntimeReady()) {
-            $this->renderRuntimeErrorPage();
-        }
-
         return $token;
     }
 
@@ -383,6 +571,15 @@ final class Controller
         $statement->execute([':token' => $this->hashToken($token)]);
     }
 
+    public function verifyAdminPassword(mixed $password, int $httpCode = 403): void
+    {
+        $admin = $this->pdo()->query('SELECT password_hash FROM admin ORDER BY id ASC LIMIT 1')->fetch();
+
+        if (!$admin || !password_verify((string) $password, (string) $admin['password_hash'])) {
+            $this->error('관리자 비밀번호가 올바르지 않습니다.', $httpCode);
+        }
+    }
+
     public function hashToken(string $token): string
     {
         return hash('sha256', $token);
@@ -405,6 +602,8 @@ final class Controller
             'menu' => [
                 ['key' => 'dash', 'label' => '대시보드', 'url' => '/admin/dash.php'],
                 ['key' => 'list', 'label' => '출석 목록', 'url' => '/admin/list.php'],
+                ['key' => 'location', 'label' => '위치 설정', 'url' => '/admin/location.php'],
+                ['key' => 'system', 'label' => '시스템 관리', 'url' => '/admin/system.php'],
                 ['key' => 'password', 'label' => '비밀번호 변경', 'url' => '/admin/password.php'],
             ],
         ]));
@@ -435,15 +634,56 @@ final class Controller
         return (string) ob_get_clean();
     }
 
-    public function renderRuntimeErrorPage(): never
+    private function migrateInstalledDatabase(): void
     {
-        http_response_code(500);
-        header('Content-Type: text/html; charset=utf-8');
-        echo $this->renderTemplate('admin/runtime-error.php', [
-            'required' => $this->string('min_php_version', '8.5.0'),
-            'current' => PHP_VERSION,
-        ]);
-        exit;
+        if ($this->schemaReady) {
+            return;
+        }
+
+        $pdo = $this->pdo();
+        $pdo->exec(
+            "CREATE TABLE IF NOT EXISTS app_settings (
+                setting_key TEXT PRIMARY KEY,
+                setting_value TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )"
+        );
+
+        $hasAttendance = ((int) $pdo
+            ->query("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'attendance'")
+            ->fetchColumn()) > 0;
+
+        if (!$hasAttendance) {
+            $this->schemaReady = true;
+            return;
+        }
+
+        $columns = [];
+        foreach ($pdo->query('PRAGMA table_info(attendance)')->fetchAll() as $column) {
+            if (isset($column['name'])) {
+                $columns[(string) $column['name']] = true;
+            }
+        }
+
+        $addColumn = static function (string $name, string $definition) use ($pdo, &$columns): void {
+            if (isset($columns[$name])) {
+                return;
+            }
+
+            $pdo->exec("ALTER TABLE attendance ADD COLUMN {$definition}");
+            $columns[$name] = true;
+        };
+
+        $addColumn('location_status', "location_status TEXT NOT NULL DEFAULT 'unchecked'");
+        $addColumn('location_latitude', 'location_latitude REAL');
+        $addColumn('location_longitude', 'location_longitude REAL');
+        $addColumn('location_accuracy', 'location_accuracy REAL');
+        $addColumn('location_distance_meters', 'location_distance_meters REAL');
+        $addColumn('location_message', 'location_message TEXT');
+        $addColumn('location_checked_at', 'location_checked_at TEXT');
+        $addColumn('location_approved_at', 'location_approved_at TEXT');
+
+        $this->schemaReady = true;
     }
 
     private function isHttps(): bool

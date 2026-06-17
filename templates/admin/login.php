@@ -30,6 +30,7 @@
         </form>
 
         <p class="small-note" id="installNotice"></p>
+        <p class="small-note version-note">현재 버전 <?php echo $h($app->string('app_version')); ?></p>
       </div>
     </section>
   </main>

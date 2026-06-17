@@ -1,6 +1,9 @@
 (function () {
   const TOKEN_KEY = 'admin_token';
+  const FILTER_HISTORY_KEY = 'attendance_filter_history';
+  const FILTER_HISTORY_LIMIT = 24;
   const DEFAULT_SYNC_INTERVAL_MS = 5000;
+  const DEFAULT_MAP_CENTER = [37.5665, 126.9780];
   const token = window.ADMIN_TOKEN || localStorage.getItem(TOKEN_KEY);
   const path = window.location.pathname;
 
@@ -38,14 +41,95 @@
     setTimeout(() => item.remove(), 2400);
   }
 
-  function showAlert(message, type = 'danger') {
-    const box = document.getElementById('adminAlert');
-    if (!box) {
-      toast(message, type === 'danger' ? 'error' : 'success');
-      return;
+  function ensureAdminDialog() {
+    let modal = document.getElementById('adminPopupModal');
+
+    if (modal) {
+      return modal;
     }
 
-    box.innerHTML = `<div class="alert alert-${type}" role="alert">${escapeHtml(message)}</div>`;
+    modal = document.createElement('div');
+    modal.className = 'admin-modal admin-popup-modal';
+    modal.id = 'adminPopupModal';
+    modal.hidden = true;
+    modal.innerHTML = `
+      <section class="admin-modal-dialog admin-popup-dialog" role="dialog" aria-modal="true" aria-labelledby="adminPopupTitle">
+        <div class="admin-modal-header">
+          <h2 id="adminPopupTitle">알림</h2>
+          <button class="btn btn-sm btn-outline-secondary" id="adminPopupCloseButton" type="button" aria-label="닫기">
+            <i class="bi bi-x-lg"></i>
+          </button>
+        </div>
+        <p class="admin-popup-message" id="adminPopupMessage"></p>
+        <div class="admin-popup-actions">
+          <button class="btn btn-outline-secondary" id="adminPopupCancelButton" type="button">취소</button>
+          <button class="btn btn-success" id="adminPopupConfirmButton" type="button">확인</button>
+        </div>
+      </section>
+    `;
+    document.body.appendChild(modal);
+
+    return modal;
+  }
+
+  function openAdminDialog(options = {}) {
+    return new Promise((resolve) => {
+      const modal = ensureAdminDialog();
+      const title = modal.querySelector('#adminPopupTitle');
+      const message = modal.querySelector('#adminPopupMessage');
+      const closeButton = modal.querySelector('#adminPopupCloseButton');
+      const cancelButton = modal.querySelector('#adminPopupCancelButton');
+      const confirmButton = modal.querySelector('#adminPopupConfirmButton');
+      const hasCancel = Boolean(options.cancelText);
+
+      title.textContent = options.title || '알림';
+      message.textContent = options.message || '';
+      cancelButton.textContent = options.cancelText || '취소';
+      cancelButton.hidden = !hasCancel;
+      confirmButton.textContent = options.confirmText || '확인';
+      confirmButton.className = `btn ${options.confirmClass || (options.type === 'danger' ? 'btn-danger' : 'btn-success')}`;
+      modal.hidden = false;
+
+      const close = (result) => {
+        modal.hidden = true;
+        closeButton.onclick = null;
+        cancelButton.onclick = null;
+        confirmButton.onclick = null;
+        modal.onclick = null;
+        resolve(result);
+      };
+
+      closeButton.onclick = () => close(false);
+      cancelButton.onclick = () => close(false);
+      confirmButton.onclick = () => close(true);
+      modal.onclick = (event) => {
+        if (event.target === modal) {
+          close(false);
+        }
+      };
+
+      confirmButton.focus();
+    });
+  }
+
+  function confirmAction(message, options = {}) {
+    return openAdminDialog({
+      title: options.title || '확인',
+      message,
+      type: options.type || 'danger',
+      confirmText: options.confirmText || '확인',
+      cancelText: options.cancelText || '취소',
+      confirmClass: options.confirmClass,
+    });
+  }
+
+  function showAlert(message, type = 'danger') {
+    openAdminDialog({
+      title: type === 'danger' ? '알림' : '확인',
+      message,
+      type: type === 'danger' ? 'danger' : 'success',
+      confirmText: '확인',
+    });
   }
 
   function clearAlert() {
@@ -138,6 +222,34 @@
     return Number.isNaN(date.getTime()) ? text || '-' : formatDateTime(date);
   }
 
+  function toDateTimeLocal(value) {
+    const text = formatDateTimeText(value);
+    return text === '-' ? '' : text.replace(' ', 'T');
+  }
+
+  function fromDateTimeLocal(value) {
+    const text = String(value || '').trim().replace('T', ' ');
+    return /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(text) ? `${text}:00` : text;
+  }
+
+  function nullableNumber(value) {
+    const text = String(value ?? '').trim();
+    const number = Number(text);
+    return text === '' || !Number.isFinite(number) ? null : number;
+  }
+
+  function valueOrDash(value, suffix = '') {
+    if (value === null || value === undefined || value === '') {
+      return '-';
+    }
+
+    return `${value}${suffix}`;
+  }
+
+  function meterText(value) {
+    return value === null || value === undefined || value === '' ? '-' : `${Number(value).toFixed(1)}m`;
+  }
+
   function parseServerTime(value) {
     const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/);
 
@@ -203,7 +315,13 @@
   }
 
   function textLength(value) {
-    return Array.from(String(value || '')).length;
+    const text = String(value || '');
+
+    if (window.Intl?.Segmenter) {
+      return Array.from(new Intl.Segmenter('ko', { granularity: 'grapheme' }).segment(text)).length;
+    }
+
+    return Array.from(text).length;
   }
 
   function inputRange(input, fallbackMin, fallbackMax) {
@@ -241,14 +359,62 @@
   function validateStudentInfo(studentNo, name) {
     const studentNoInput = document.getElementById('studentNoInput');
     const nameInput = document.getElementById('nameInput');
+    const studentNoText = String(studentNo || '').trim();
 
-    return validateLength(studentNo, '학번은', inputRange(studentNoInput, 5, 5))
-      && validateLength(name, '이름은', inputRange(nameInput, 1, 5));
+    if (!/^\d+$/.test(studentNoText)) {
+      showAlert('학번은 숫자만 입력해주세요.');
+      return false;
+    }
+
+    if (!validateLength(studentNoText, '학번은', inputRange(studentNoInput, 5, 5))) {
+      return false;
+    }
+
+    return validateLength(name, '이름은', inputRange(nameInput, 1, 10));
+  }
+
+  function locationStatusInfo(value) {
+    return ({
+      verified: ['위치 인증 완료', 'text-bg-success'],
+      pending: ['관리자 승인 대기', 'text-bg-warning'],
+      approved: ['관리자 승인 완료', 'text-bg-info'],
+      rejected: ['위치 인증 반려', 'text-bg-danger'],
+      unchecked: ['위치 인증 미사용', 'text-bg-secondary'],
+    })[value] || ['위치 인증 미사용', 'text-bg-secondary'];
+  }
+
+  function locationStatusText(value) {
+    return locationStatusInfo(value)[0];
+  }
+
+  function leafletReady() {
+    return typeof window.L !== 'undefined';
+  }
+
+  function buildMap(element, center = DEFAULT_MAP_CENTER, zoom = 16) {
+    if (!element || !leafletReady()) {
+      if (element) {
+        element.innerHTML = '<div class="map-empty">지도를 불러오지 못했습니다.</div>';
+      }
+      return null;
+    }
+
+    const map = window.L.map(element, {
+      scrollWheelZoom: false,
+    }).setView(center, zoom);
+
+    window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors',
+    }).addTo(map);
+
+    return map;
   }
 
   function initDash() {
     const todayCount = document.getElementById('todayCount');
     const totalCount = document.getElementById('totalCount');
+    const pendingCount = document.getElementById('pendingCount');
     const serverTime = document.getElementById('summaryServerTime');
 
     async function loadSummary(showError = true) {
@@ -266,6 +432,9 @@
         const result = data.result || {};
         todayCount.textContent = `${Number(result.today || 0)}건`;
         totalCount.textContent = `${Number(result.total || 0)}건`;
+        if (pendingCount) {
+          pendingCount.textContent = `${Number(result.pending || 0)}건`;
+        }
 
         if (result.server_time) {
           syncSummaryServerTime(result.server_time, serverTime);
@@ -286,36 +455,141 @@
 
   function initList() {
     const params = new URLSearchParams(window.location.search);
-    const dateInput = document.getElementById('dateInput');
+    const startDateInput = document.getElementById('startDateInput');
+    const endDateInput = document.getElementById('endDateInput');
+    const keywordFilterInput = document.getElementById('keywordFilterInput');
+    const sortByInput = document.getElementById('sortByInput');
+    const sortOrderInput = document.getElementById('sortOrderInput');
     const form = document.getElementById('attendanceFilter');
     const button = document.getElementById('loadListButton');
     const exportButton = document.getElementById('exportListButton');
+    const bulkDeleteButton = document.getElementById('bulkDeleteButton');
+    const previousFilterButton = document.getElementById('previousFilterButton');
+    const nextFilterButton = document.getElementById('nextFilterButton');
+    const selectAllRowsInput = document.getElementById('selectAllRowsInput');
+    const locationDetailModal = document.getElementById('locationDetailModal');
+    const closeLocationDetailButton = document.getElementById('closeLocationDetailButton');
+    const locationDetailList = document.getElementById('locationDetailList');
+    const locationDetailMap = document.getElementById('locationDetailMap');
     let currentRows = [];
+    let locationSettings = null;
+    let detailMap = null;
+    let filterHistory = [];
+    let filterHistoryIndex = -1;
 
-    dateInput.value = params.get('date') || todayForInput();
+    startDateInput.value = params.get('start_date') || params.get('date') || todayForInput();
+    endDateInput.value = params.get('end_date') || params.get('date') || startDateInput.value;
+    keywordFilterInput.value = params.get('keyword') || params.get('student_no') || params.get('name') || '';
+    sortByInput.value = params.get('sort_by') || 'created_at';
+    sortOrderInput.value = params.get('sort_order') || 'asc';
+
+    if (!sortByInput.value) sortByInput.value = 'created_at';
+    if (!sortOrderInput.value) sortOrderInput.value = 'asc';
+
+    loadFilterHistory();
+    ensureCurrentFilterHistory();
 
     form.addEventListener('submit', (event) => {
       event.preventDefault();
-      const url = new URL(window.location.href);
-      url.searchParams.set('date', dateInput.value);
-      window.history.replaceState(null, '', url);
+      recordFilterHistory();
+      syncFilterUrl();
       loadList();
     });
+
+    document.querySelectorAll('[data-sort-key]').forEach((sortButton) => {
+      sortButton.addEventListener('click', () => {
+        const key = sortButton.dataset.sortKey;
+        if (sortByInput.value === key) {
+          sortOrderInput.value = sortOrderInput.value === 'asc' ? 'desc' : 'asc';
+        } else {
+          sortByInput.value = key;
+          sortOrderInput.value = 'asc';
+        }
+
+        updateSortIndicators();
+        recordFilterHistory();
+        syncFilterUrl();
+        loadList();
+      });
+    });
+
+    previousFilterButton.addEventListener('click', () => moveFilterHistory(-1));
+    nextFilterButton.addEventListener('click', () => moveFilterHistory(1));
 
     exportButton.addEventListener('click', () => {
       exportCsv(currentRows);
     });
 
+    selectAllRowsInput.addEventListener('change', () => {
+      document.querySelectorAll('[data-row-select]').forEach((checkbox) => {
+        checkbox.checked = selectAllRowsInput.checked;
+      });
+      updateSelectionState();
+    });
+
+    bulkDeleteButton.addEventListener('click', async () => {
+      const ids = selectedIds();
+      if (ids.length < 1) {
+        toast('삭제할 출석 기록을 선택해주세요.', 'error');
+        return;
+      }
+
+      if (!await confirmAction(`선택한 ${ids.length}건의 출석 기록을 삭제할까요?`, {
+        title: '선택 삭제',
+        confirmText: '삭제',
+        confirmClass: 'btn-danger',
+      })) {
+        return;
+      }
+
+      try {
+        const data = await api('/api/admin-edit.php', {
+          type: 'bulk_delete',
+          ids,
+        });
+        if (!data) return;
+
+        if (data.status !== 1) {
+          showAlert(data.msg || '선택 삭제에 실패했습니다.');
+          return;
+        }
+
+        toast('선택한 출석 기록이 삭제되었습니다.');
+        loadList();
+      } catch (error) {
+        showAlert('선택 삭제 중 오류가 발생했습니다.');
+      }
+    });
+
+    closeLocationDetailButton.addEventListener('click', closeLocationDetail);
+    locationDetailModal.addEventListener('click', (event) => {
+      if (event.target === locationDetailModal) {
+        closeLocationDetail();
+      }
+    });
+
+    async function loadLocationSettings() {
+      try {
+        const data = await api('/api/admin-location.php', { type: 'get' });
+        if (data?.status === 1) {
+          locationSettings = data.result || {};
+        }
+      } catch (error) {
+        locationSettings = {};
+      }
+    }
+
     async function loadList() {
       clearAlert();
       currentRows = [];
       renderLoading();
+      updateSelectionState();
       button.disabled = true;
       exportButton.disabled = true;
       button.textContent = '조회 중...';
 
       try {
-        const data = await api('/api/admin-list.php', { date: dateInput.value });
+        const data = await api('/api/admin-list.php', readFilters());
         if (!data) return;
 
         if (data.status !== 1) {
@@ -335,12 +609,140 @@
       }
     }
 
+    function readFilters() {
+      return {
+        start_date: startDateInput.value,
+        end_date: endDateInput.value,
+        keyword: keywordFilterInput.value.trim(),
+        sort_by: sortByInput.value,
+        sort_order: sortOrderInput.value,
+      };
+    }
+
+    function syncFilterUrl() {
+      const url = new URL(window.location.href);
+      const filters = readFilters();
+      url.searchParams.delete('date');
+      url.searchParams.delete('student_no');
+      url.searchParams.delete('name');
+      url.searchParams.delete('location_status');
+
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value) {
+          url.searchParams.set(key, value);
+        } else {
+          url.searchParams.delete(key);
+        }
+      });
+
+      window.history.replaceState(null, '', url);
+    }
+
+    function normalizedFilters(filters = readFilters()) {
+      return {
+        start_date: filters.start_date || '',
+        end_date: filters.end_date || '',
+        keyword: filters.keyword || '',
+        sort_by: filters.sort_by || 'created_at',
+        sort_order: filters.sort_order || 'asc',
+      };
+    }
+
+    function sameFilters(first, second) {
+      return JSON.stringify(normalizedFilters(first)) === JSON.stringify(normalizedFilters(second));
+    }
+
+    function loadFilterHistory() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(FILTER_HISTORY_KEY) || '[]');
+        filterHistory = Array.isArray(saved)
+          ? saved.map((item) => normalizedFilters(item)).filter((item) => item.start_date && item.end_date)
+          : [];
+      } catch (error) {
+        filterHistory = [];
+      }
+    }
+
+    function saveFilterHistory() {
+      localStorage.setItem(FILTER_HISTORY_KEY, JSON.stringify(filterHistory.slice(-FILTER_HISTORY_LIMIT)));
+      updateFilterHistoryButtons();
+    }
+
+    function ensureCurrentFilterHistory() {
+      const filters = normalizedFilters();
+      filterHistoryIndex = filterHistory.findIndex((item) => sameFilters(item, filters));
+
+      if (filterHistoryIndex < 0) {
+        filterHistory.push(filters);
+        filterHistory = filterHistory.slice(-FILTER_HISTORY_LIMIT);
+        filterHistoryIndex = filterHistory.length - 1;
+        saveFilterHistory();
+        return;
+      }
+
+      updateFilterHistoryButtons();
+    }
+
+    function recordFilterHistory(filters = readFilters()) {
+      const normalized = normalizedFilters(filters);
+
+      if (filterHistoryIndex >= 0 && sameFilters(filterHistory[filterHistoryIndex], normalized)) {
+        updateFilterHistoryButtons();
+        return;
+      }
+
+      filterHistory = filterHistory.slice(0, filterHistoryIndex + 1);
+      filterHistory.push(normalized);
+      filterHistory = filterHistory.slice(-FILTER_HISTORY_LIMIT);
+      filterHistoryIndex = filterHistory.length - 1;
+      saveFilterHistory();
+    }
+
+    function moveFilterHistory(direction) {
+      const nextIndex = filterHistoryIndex + direction;
+
+      if (nextIndex < 0 || nextIndex >= filterHistory.length) {
+        return;
+      }
+
+      filterHistoryIndex = nextIndex;
+      applyFilters(filterHistory[filterHistoryIndex]);
+      updateFilterHistoryButtons();
+      syncFilterUrl();
+      loadList();
+    }
+
+    function applyFilters(filters) {
+      const normalized = normalizedFilters(filters);
+      startDateInput.value = normalized.start_date;
+      endDateInput.value = normalized.end_date;
+      keywordFilterInput.value = normalized.keyword;
+      sortByInput.value = normalized.sort_by;
+      sortOrderInput.value = normalized.sort_order;
+      updateSortIndicators();
+    }
+
+    function updateFilterHistoryButtons() {
+      previousFilterButton.disabled = filterHistoryIndex <= 0;
+      nextFilterButton.disabled = filterHistoryIndex < 0 || filterHistoryIndex >= filterHistory.length - 1;
+    }
+
+    function currentRangeTitle() {
+      const filters = readFilters();
+
+      if (filters.start_date === filters.end_date) {
+        return `${filters.start_date} 출석 기록`;
+      }
+
+      return `${filters.start_date} ~ ${filters.end_date} 출석 기록`;
+    }
+
     function renderLoading() {
-      document.getElementById('listTitle').textContent = `${dateInput.value} 출석 기록`;
+      document.getElementById('listTitle').textContent = currentRangeTitle();
       document.getElementById('attendanceCount').textContent = '조회 중';
       document.getElementById('attendanceTableBody').innerHTML = `
         <tr>
-          <td class="text-center py-5" colspan="5">
+          <td class="text-center py-5" colspan="7">
             <div class="empty-table-state">
               <div class="loading-spinner" aria-hidden="true"></div>
               <strong>조회 중입니다.</strong>
@@ -355,7 +757,7 @@
       document.getElementById('attendanceCount').textContent = '0건';
       document.getElementById('attendanceTableBody').innerHTML = `
         <tr>
-          <td class="text-center py-5" colspan="5">
+          <td class="text-center py-5" colspan="7">
             <div class="empty-table-state">
               <strong>${escapeHtml(title)}</strong>
               <p class="text-secondary mb-0">${escapeHtml(description)}</p>
@@ -363,36 +765,44 @@
           </td>
         </tr>
       `;
+      updateSelectionState();
     }
 
     function renderList(rows) {
       currentRows = rows;
-      document.getElementById('listTitle').textContent = `${dateInput.value} 출석 기록`;
+      document.getElementById('listTitle').textContent = currentRangeTitle();
       document.getElementById('attendanceCount').textContent = `${rows.length}건`;
       const body = document.getElementById('attendanceTableBody');
 
       if (rows.length === 0) {
         body.innerHTML = `
           <tr>
-            <td class="text-center py-5" colspan="5">
+            <td class="text-center py-5" colspan="7">
               <div class="empty-table-state">
                 <strong>출석 기록이 없습니다.</strong>
-                <p class="text-secondary mb-0">선택한 날짜에 등록된 출석이 없어요.</p>
+                <p class="text-secondary mb-0">선택한 조건에 등록된 출석이 없어요.</p>
               </div>
             </td>
           </tr>
         `;
+        updateSelectionState();
         return;
       }
 
       body.innerHTML = rows.map((row, index) => `
         <tr>
+          <td class="text-center">
+            <input class="form-check-input" type="checkbox" data-row-select="${escapeHtml(row.id)}" aria-label="${escapeHtml(row.name)} 선택">
+          </td>
           <td><span class="text-secondary">${index + 1}</span></td>
           <td>${escapeHtml(row.student_no)}</td>
           <td class="fw-semibold">${escapeHtml(row.name)}</td>
           <td class="text-nowrap">${escapeHtml(formatDateTimeText(row.attend_datetime || row.created_at || row.attend_date))}</td>
+          <td>${locationStatusHtml(row)}</td>
           <td class="text-end">
             <div class="d-flex justify-content-end gap-2">
+              ${row.location_status === 'pending' ? `<button class="btn btn-sm btn-outline-primary" type="button" data-approve-id="${escapeHtml(row.id)}">승인</button>` : ''}
+              ${row.location_status === 'pending' ? `<button class="btn btn-sm btn-outline-warning" type="button" data-reject-id="${escapeHtml(row.id)}">반려</button>` : ''}
               <a class="btn btn-sm btn-outline-success" href="/admin/edit.php?id=${encodeURIComponent(row.id)}">수정</a>
               <button class="btn btn-sm btn-outline-danger" type="button" data-delete-id="${escapeHtml(row.id)}">삭제</button>
             </div>
@@ -400,9 +810,83 @@
         </tr>
       `).join('');
 
+      body.querySelectorAll('[data-row-select]').forEach((checkbox) => {
+        checkbox.addEventListener('change', updateSelectionState);
+      });
+
+      body.querySelectorAll('[data-location-detail-id]').forEach((detailButton) => {
+        detailButton.addEventListener('click', () => {
+          const row = currentRows.find((item) => String(item.id) === String(detailButton.dataset.locationDetailId));
+          if (row) {
+            openLocationDetail(row);
+          }
+        });
+      });
+
+      body.querySelectorAll('[data-approve-id]').forEach((approveButton) => {
+        approveButton.addEventListener('click', async () => {
+          if (!await confirmAction('이 위치 인증 대기 출석을 승인할까요?', {
+            title: '승인 확인',
+            confirmText: '승인',
+            confirmClass: 'btn-primary',
+            type: 'info',
+          })) return;
+
+          try {
+            const data = await api('/api/admin-edit.php', {
+              type: 'approve_location',
+              id: Number(approveButton.dataset.approveId),
+            });
+            if (!data) return;
+
+            if (data.status !== 1) {
+              showAlert(data.msg || '승인에 실패했습니다.');
+              return;
+            }
+
+            toast('승인되었습니다.');
+            loadList();
+          } catch (error) {
+            showAlert('승인 중 오류가 발생했습니다.');
+          }
+        });
+      });
+
+      body.querySelectorAll('[data-reject-id]').forEach((rejectButton) => {
+        rejectButton.addEventListener('click', async () => {
+          if (!await confirmAction('이 위치 인증 대기 출석을 반려할까요?', {
+            title: '반려 확인',
+            confirmText: '반려',
+            confirmClass: 'btn-warning',
+          })) return;
+
+          try {
+            const data = await api('/api/admin-edit.php', {
+              type: 'reject_location',
+              id: Number(rejectButton.dataset.rejectId),
+            });
+            if (!data) return;
+
+            if (data.status !== 1) {
+              showAlert(data.msg || '반려에 실패했습니다.');
+              return;
+            }
+
+            toast('반려했습니다.');
+            loadList();
+          } catch (error) {
+            showAlert('반려 중 오류가 발생했습니다.');
+          }
+        });
+      });
+
       body.querySelectorAll('[data-delete-id]').forEach((deleteButton) => {
         deleteButton.addEventListener('click', async () => {
-          if (!window.confirm('이 출석 기록을 삭제할까요?')) return;
+          if (!await confirmAction('이 출석 기록을 삭제할까요?', {
+            title: '삭제 확인',
+            confirmText: '삭제',
+            confirmClass: 'btn-danger',
+          })) return;
 
           try {
             const data = await api('/api/admin-edit.php', {
@@ -423,6 +907,126 @@
           }
         });
       });
+
+      updateSelectionState();
+    }
+
+    function locationStatusHtml(row) {
+      const status = String(row.location_status || 'unchecked');
+      const [label, className] = locationStatusInfo(status);
+      const distance = row.location_distance_meters === null || row.location_distance_meters === undefined
+        ? ''
+        : `<small class="location-distance">${Number(row.location_distance_meters).toFixed(1)}m</small>`;
+
+      return `
+        <button class="location-status-button" type="button" data-location-detail-id="${escapeHtml(row.id)}">
+          <span class="badge rounded-pill ${className}">${label}</span>${distance}
+        </button>
+      `;
+    }
+
+    function selectedIds() {
+      return Array.from(document.querySelectorAll('[data-row-select]:checked'))
+        .map((checkbox) => Number(checkbox.dataset.rowSelect))
+        .filter((id) => Number.isInteger(id) && id > 0);
+    }
+
+    function updateSelectionState() {
+      const checkboxes = Array.from(document.querySelectorAll('[data-row-select]'));
+      const checkedCount = checkboxes.filter((checkbox) => checkbox.checked).length;
+      bulkDeleteButton.disabled = checkedCount < 1;
+      selectAllRowsInput.checked = checkboxes.length > 0 && checkedCount === checkboxes.length;
+      selectAllRowsInput.indeterminate = checkedCount > 0 && checkedCount < checkboxes.length;
+    }
+
+    function updateSortIndicators() {
+      document.querySelectorAll('[data-sort-icon]').forEach((icon) => {
+        const key = icon.dataset.sortIcon;
+        icon.textContent = key === sortByInput.value ? (sortOrderInput.value === 'desc' ? '↓' : '↑') : '↕';
+      });
+    }
+
+    async function openLocationDetail(row) {
+      if (!locationSettings) {
+        await loadLocationSettings();
+      }
+
+      const settings = locationSettings || {};
+      const hasStudentLocation = row.location_latitude !== null && row.location_latitude !== undefined
+        && row.location_longitude !== null && row.location_longitude !== undefined;
+      const hasCenter = settings.latitude !== null && settings.latitude !== undefined
+        && settings.longitude !== null && settings.longitude !== undefined;
+      const rows = [
+        ['학생', `${row.student_no} ${row.name}`],
+        ['출석일시', formatDateTimeText(row.attend_datetime || row.created_at)],
+        ['상태', locationStatusText(row.location_status)],
+        ['위도', valueOrDash(row.location_latitude)],
+        ['경도', valueOrDash(row.location_longitude)],
+        ['정확도', meterText(row.location_accuracy)],
+        ['중심과 거리', meterText(row.location_distance_meters)],
+        ['위치 메시지', valueOrDash(row.location_message)],
+        ['위치 확인 시각', valueOrDash(formatDateTimeText(row.location_checked_at))],
+        ['승인/반려 시각', valueOrDash(formatDateTimeText(row.location_approved_at))],
+      ];
+
+      locationDetailList.innerHTML = rows.map(([label, value]) => `
+        <div>
+          <dt>${escapeHtml(label)}</dt>
+          <dd>${escapeHtml(value)}</dd>
+        </div>
+      `).join('');
+      locationDetailModal.hidden = false;
+
+      if (detailMap) {
+        detailMap.remove();
+        detailMap = null;
+      }
+
+      const center = hasStudentLocation
+        ? [Number(row.location_latitude), Number(row.location_longitude)]
+        : (hasCenter ? [Number(settings.latitude), Number(settings.longitude)] : DEFAULT_MAP_CENTER);
+      detailMap = buildMap(locationDetailMap, center, hasStudentLocation || hasCenter ? 17 : 13);
+
+      if (!detailMap) {
+        return;
+      }
+
+      const bounds = [];
+
+      if (hasCenter) {
+        const centerLatLng = [Number(settings.latitude), Number(settings.longitude)];
+        window.L.marker(centerLatLng).addTo(detailMap).bindPopup('출석 가능 중심');
+        bounds.push(centerLatLng);
+
+        if (settings.radius_meters !== null && settings.radius_meters !== undefined) {
+          window.L.circle(centerLatLng, {
+            radius: Number(settings.radius_meters),
+            color: '#198754',
+            fillColor: '#198754',
+            fillOpacity: 0.12,
+          }).addTo(detailMap);
+        }
+      }
+
+      if (hasStudentLocation) {
+        const studentLatLng = [Number(row.location_latitude), Number(row.location_longitude)];
+        window.L.marker(studentLatLng).addTo(detailMap).bindPopup('학생 출석 위치');
+        bounds.push(studentLatLng);
+      }
+
+      if (bounds.length > 1) {
+        detailMap.fitBounds(bounds, { padding: [32, 32], maxZoom: 17 });
+      }
+
+      setTimeout(() => detailMap.invalidateSize(), 80);
+    }
+
+    function closeLocationDetail() {
+      locationDetailModal.hidden = true;
+      if (detailMap) {
+        detailMap.remove();
+        detailMap = null;
+      }
     }
 
     function exportCsv(rows) {
@@ -432,12 +1036,15 @@
       }
 
       const csvRows = [
-        ['순서', '학번', '이름', '출석일시'],
+        ['순서', '학번', '이름', '출석일시', '위치 인증', '거리', '위치 메시지'],
         ...rows.map((row, index) => [
           index + 1,
           row.student_no,
           row.name,
           formatDateTimeText(row.attend_datetime || row.created_at || row.attend_date),
+          locationStatusText(row.location_status),
+          row.location_distance_meters ?? '',
+          row.location_message ?? '',
         ]),
       ];
       const csv = `\ufeff${csvRows.map((row) => row.map(csvEscape).join(',')).join('\r\n')}`;
@@ -446,7 +1053,7 @@
       const link = document.createElement('a');
 
       link.href = url;
-      link.download = `attendance-${dateInput.value}.csv`;
+      link.download = `attendance-${startDateInput.value}-${endDateInput.value}.csv`;
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -463,7 +1070,204 @@
       return text;
     }
 
+    updateSortIndicators();
+    loadLocationSettings();
     loadList();
+  }
+
+  function initLocation() {
+    const form = document.getElementById('locationForm');
+    const enabledInput = document.getElementById('locationEnabledInput');
+    const latitudeInput = document.getElementById('latitudeInput');
+    const longitudeInput = document.getElementById('longitudeInput');
+    const radiusInput = document.getElementById('radiusInput');
+    const timeoutInput = document.getElementById('timeoutInput');
+    const useCurrentButton = document.getElementById('useCurrentLocationButton');
+    const saveButton = document.getElementById('saveLocationButton');
+    const mapElement = document.getElementById('locationSettingsMap');
+    let settingsMap = null;
+    let centerMarker = null;
+    let radiusCircle = null;
+
+    function fillForm(settings = {}) {
+      enabledInput.checked = Boolean(settings.enabled);
+      latitudeInput.value = settings.latitude ?? '';
+      longitudeInput.value = settings.longitude ?? '';
+      radiusInput.value = settings.radius_meters ?? '';
+      timeoutInput.value = settings.timeout_seconds ?? '';
+      updateSettingsMap();
+    }
+
+    function readForm() {
+      return {
+        type: 'save',
+        enabled: enabledInput.checked,
+        latitude: nullableNumber(latitudeInput.value),
+        longitude: nullableNumber(longitudeInput.value),
+        radius_meters: nullableNumber(radiusInput.value),
+        timeout_seconds: nullableNumber(timeoutInput.value),
+      };
+    }
+
+    function initSettingsMap() {
+      if (settingsMap || !mapElement) {
+        return;
+      }
+
+      settingsMap = buildMap(mapElement, DEFAULT_MAP_CENTER, 15);
+
+      if (!settingsMap) {
+        return;
+      }
+
+      settingsMap.on('click', (event) => {
+        latitudeInput.value = event.latlng.lat.toFixed(6);
+        longitudeInput.value = event.latlng.lng.toFixed(6);
+        updateSettingsMap();
+      });
+    }
+
+    function updateSettingsMap() {
+      initSettingsMap();
+
+      if (!settingsMap) {
+        return;
+      }
+
+      const latitude = nullableNumber(latitudeInput.value);
+      const longitude = nullableNumber(longitudeInput.value);
+      const radius = nullableNumber(radiusInput.value);
+
+      if (latitude === null || longitude === null) {
+        settingsMap.setView(DEFAULT_MAP_CENTER, 13);
+        if (centerMarker) {
+          centerMarker.remove();
+          centerMarker = null;
+        }
+        if (radiusCircle) {
+          radiusCircle.remove();
+          radiusCircle = null;
+        }
+        return;
+      }
+
+      const center = [latitude, longitude];
+
+      if (!centerMarker) {
+        centerMarker = window.L.marker(center, { draggable: true }).addTo(settingsMap);
+        centerMarker.on('dragend', () => {
+          const latLng = centerMarker.getLatLng();
+          latitudeInput.value = latLng.lat.toFixed(6);
+          longitudeInput.value = latLng.lng.toFixed(6);
+          updateSettingsMap();
+        });
+      } else {
+        centerMarker.setLatLng(center);
+      }
+
+      if (radius !== null) {
+        if (!radiusCircle) {
+          radiusCircle = window.L.circle(center, {
+            radius,
+            color: '#198754',
+            fillColor: '#198754',
+            fillOpacity: 0.12,
+          }).addTo(settingsMap);
+        } else {
+          radiusCircle.setLatLng(center);
+          radiusCircle.setRadius(radius);
+        }
+      } else if (radiusCircle) {
+        radiusCircle.remove();
+        radiusCircle = null;
+      }
+
+      settingsMap.setView(center, 17);
+      setTimeout(() => settingsMap.invalidateSize(), 50);
+    }
+
+    async function loadLocationSettings() {
+      clearAlert();
+
+      try {
+        const data = await api('/api/admin-location.php', { type: 'get' });
+        if (!data) return;
+
+        if (data.status !== 1) {
+          showAlert(data.msg || '위치 설정을 불러오지 못했습니다.');
+          return;
+        }
+
+        fillForm(data.result || {});
+      } catch (error) {
+        showAlert('위치 설정을 불러오는 중 오류가 발생했습니다.');
+      }
+    }
+
+    [latitudeInput, longitudeInput, radiusInput].forEach((input) => {
+      input.addEventListener('input', updateSettingsMap);
+    });
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      clearAlert();
+      saveButton.disabled = true;
+      saveButton.textContent = '저장 중...';
+
+      try {
+        const data = await api('/api/admin-location.php', readForm());
+        if (!data) return;
+
+        if (data.status !== 1) {
+          showAlert(data.msg || '위치 설정 저장에 실패했습니다.');
+          return;
+        }
+
+        fillForm(data.result || {});
+        toast('위치 설정이 저장되었습니다.');
+      } catch (error) {
+        showAlert('위치 설정 저장 중 오류가 발생했습니다.');
+      } finally {
+        saveButton.disabled = false;
+        saveButton.textContent = '저장';
+      }
+    });
+
+    useCurrentButton.addEventListener('click', () => {
+      if (!window.isSecureContext) {
+        showAlert('현재 접속 환경에서는 위치 권한을 요청할 수 없습니다. HTTPS 주소로 접속해주세요.');
+        return;
+      }
+
+      if (!navigator.geolocation) {
+        showAlert('이 브라우저에서는 위치 기능을 사용할 수 없습니다.');
+        return;
+      }
+
+      clearAlert();
+      useCurrentButton.disabled = true;
+      useCurrentButton.innerHTML = '<i class="bi bi-hourglass-split me-1"></i> 확인 중...';
+
+      navigator.geolocation.getCurrentPosition((position) => {
+        latitudeInput.value = position.coords.latitude.toFixed(6);
+        longitudeInput.value = position.coords.longitude.toFixed(6);
+        updateSettingsMap();
+        toast('현재 위치를 입력했습니다.');
+        useCurrentButton.disabled = false;
+        useCurrentButton.innerHTML = '<i class="bi bi-crosshair me-1"></i> 현재 위치 사용';
+      }, () => {
+        showAlert('현재 위치를 가져오지 못했습니다. 브라우저 위치 권한을 확인해주세요.');
+        useCurrentButton.disabled = false;
+        useCurrentButton.innerHTML = '<i class="bi bi-crosshair me-1"></i> 현재 위치 사용';
+      }, {
+        enableHighAccuracy: true,
+        maximumAge: 0,
+        timeout: 10000,
+      });
+    });
+
+    initSettingsMap();
+    loadLocationSettings();
   }
 
   function initEdit() {
@@ -471,6 +1275,7 @@
     const id = Number(params.get('id') || 0);
     const form = document.getElementById('editForm');
     const saveButton = document.getElementById('saveEditButton');
+    const field = (id) => document.getElementById(id);
 
     if (!id) {
       showAlert('올바른 출석 기록을 선택해주세요.');
@@ -489,11 +1294,19 @@
         }
 
         const record = data.result;
-        document.getElementById('editIdInput').value = record.id;
-        document.getElementById('editDateInput').value = record.attend_date;
-        document.getElementById('studentNoInput').value = record.student_no;
-        document.getElementById('nameInput').value = record.name;
-        document.getElementById('attendDateTimeText').textContent = formatDateTimeText(record.attend_datetime || record.created_at);
+        field('editIdInput').value = record.id;
+        field('editDateInput').value = record.attend_date;
+        field('studentNoInput').value = record.student_no;
+        field('nameInput').value = record.name;
+        field('createdAtInput').value = toDateTimeLocal(record.attend_datetime || record.created_at);
+        field('locationStatusEditInput').value = record.location_status || 'unchecked';
+        field('locationLatitudeInput').value = record.location_latitude ?? '';
+        field('locationLongitudeInput').value = record.location_longitude ?? '';
+        field('locationAccuracyInput').value = record.location_accuracy ?? '';
+        field('locationDistanceInput').value = record.location_distance_meters ?? '';
+        field('locationMessageInput').value = record.location_message ?? '';
+        field('locationCheckedAtInput').value = toDateTimeLocal(record.location_checked_at);
+        field('locationApprovedAtInput').value = toDateTimeLocal(record.location_approved_at);
       })
       .catch(() => {
         showAlert('출석 기록을 불러오는 중 오류가 발생했습니다.');
@@ -505,8 +1318,8 @@
       clearAlert();
       saveButton.disabled = true;
       saveButton.textContent = '저장 중...';
-      const studentNo = document.getElementById('studentNoInput').value.trim();
-      const name = document.getElementById('nameInput').value.trim();
+      const studentNo = field('studentNoInput').value.trim();
+      const name = field('nameInput').value.trim();
 
       if (!validateStudentInfo(studentNo, name)) {
         saveButton.disabled = false;
@@ -517,9 +1330,18 @@
       try {
         const data = await api('/api/admin-edit.php', {
           type: 'update',
-          id: Number(document.getElementById('editIdInput').value),
+          id: Number(field('editIdInput').value),
           student_no: studentNo,
           name,
+          created_at: fromDateTimeLocal(field('createdAtInput').value),
+          location_status: field('locationStatusEditInput').value,
+          location_latitude: nullableNumber(field('locationLatitudeInput').value),
+          location_longitude: nullableNumber(field('locationLongitudeInput').value),
+          location_accuracy: nullableNumber(field('locationAccuracyInput').value),
+          location_distance_meters: nullableNumber(field('locationDistanceInput').value),
+          location_message: field('locationMessageInput').value.trim(),
+          location_checked_at: fromDateTimeLocal(field('locationCheckedAtInput').value),
+          location_approved_at: fromDateTimeLocal(field('locationApprovedAtInput').value),
         });
 
         if (!data) return;
@@ -530,7 +1352,7 @@
         }
 
         toast('저장되었습니다.');
-        const date = document.getElementById('editDateInput').value;
+        const date = data.result?.attend_date || field('createdAtInput').value.slice(0, 10) || field('editDateInput').value;
         window.location.href = `/admin/list.php?date=${encodeURIComponent(date)}`;
       } catch (error) {
         showAlert('저장 중 오류가 발생했습니다.');
@@ -539,6 +1361,195 @@
         saveButton.textContent = '저장';
       }
     });
+  }
+
+  function initSystem() {
+    const resetForm = document.getElementById('systemResetForm');
+    const resetPasswordInput = document.getElementById('systemResetPasswordInput');
+    const resetButton = document.getElementById('systemResetButton');
+    const updateCheckButton = document.getElementById('updateCheckButton');
+    const updateInstallForm = document.getElementById('updateInstallForm');
+    const updatePasswordInput = document.getElementById('updatePasswordInput');
+    const updateInstallButton = document.getElementById('updateInstallButton');
+    const releaseSelect = document.getElementById('releaseSelect');
+    const releaseList = document.getElementById('releaseList');
+    const currentVersionText = document.getElementById('currentVersionText');
+    const latestVersionText = document.getElementById('latestVersionText');
+
+    if (!resetForm || !updateCheckButton) {
+      return;
+    }
+
+    resetForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+
+      const scope = new FormData(resetForm).get('reset_scope') || 'attendance';
+      const isAll = scope === 'all';
+      const confirmed = await confirmAction(
+        isAll
+          ? '출석 기록과 저장된 설정을 초기화할까요? 관리자 비밀번호는 유지됩니다.'
+          : '모든 출석 기록을 초기화할까요?',
+        {
+          title: '초기화 확인',
+          confirmText: '초기화',
+          confirmClass: 'btn-danger',
+        }
+      );
+
+      if (!confirmed) {
+        return;
+      }
+
+      resetButton.disabled = true;
+      resetButton.textContent = '초기화 중...';
+
+      try {
+        const data = await api('/api/admin-system.php', {
+          type: 'reset',
+          scope,
+          password: resetPasswordInput.value,
+        });
+        if (!data) return;
+
+        if (data.status !== 1) {
+          showAlert(data.msg || '초기화에 실패했습니다.');
+          return;
+        }
+
+        resetPasswordInput.value = '';
+        toast(data.msg || '초기화되었습니다.');
+      } catch (error) {
+        showAlert('초기화 중 오류가 발생했습니다.');
+      } finally {
+        resetButton.disabled = false;
+        resetButton.innerHTML = '<i class="bi bi-exclamation-triangle me-1"></i> 초기화 실행';
+      }
+    });
+
+    updateCheckButton.addEventListener('click', () => loadUpdateInfo(true));
+
+    updateInstallForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+
+      const tag = releaseSelect.value;
+
+      if (!tag) {
+        showAlert('설치할 릴리즈를 선택해주세요.');
+        return;
+      }
+
+      const confirmed = await confirmAction(`${tag} 버전으로 업데이트할까요?`, {
+        title: '업데이트 확인',
+        confirmText: '업데이트',
+        confirmClass: 'btn-success',
+        type: 'info',
+      });
+
+      if (!confirmed) {
+        return;
+      }
+
+      updateInstallButton.disabled = true;
+      updateInstallButton.textContent = '업데이트 중...';
+
+      try {
+        const data = await api('/api/admin-system.php', {
+          type: 'update_install',
+          tag,
+          password: updatePasswordInput.value,
+        });
+        if (!data) return;
+
+        if (data.status !== 1) {
+          showAlert(data.msg || '업데이트에 실패했습니다.');
+          return;
+        }
+
+        updatePasswordInput.value = '';
+        const installedVersion = data.result?.installed_version || tag;
+        currentVersionText.textContent = installedVersion;
+        toast(`${installedVersion} 버전으로 업데이트되었습니다.`);
+        await openAdminDialog({
+          title: '업데이트 완료',
+          message: `업데이트가 완료되었습니다. 백업 파일: ${data.result?.backup_path || '-'}`,
+          type: 'success',
+          confirmText: '확인',
+        });
+        loadUpdateInfo(false);
+      } catch (error) {
+        showAlert('업데이트 중 오류가 발생했습니다.');
+      } finally {
+        updateInstallButton.disabled = false;
+        updateInstallButton.innerHTML = '<i class="bi bi-download me-1"></i> 다운로드 후 업그레이드';
+      }
+    });
+
+    async function loadUpdateInfo(showSuccess) {
+      updateCheckButton.disabled = true;
+      updateCheckButton.textContent = '확인 중...';
+      latestVersionText.textContent = '릴리즈 정보를 가져오는 중입니다.';
+
+      try {
+        const data = await api('/api/admin-system.php', { type: 'update_check' });
+        if (!data) return;
+
+        if (data.status !== 1) {
+          showAlert(data.msg || '릴리즈 정보를 확인할 수 없습니다.');
+          return;
+        }
+
+        renderUpdateInfo(data.result || {});
+
+        if (showSuccess) {
+          toast(data.result?.update_available ? '설치 가능한 업데이트가 있습니다.' : '현재 최신 버전입니다.');
+        }
+      } catch (error) {
+        latestVersionText.textContent = '릴리즈 정보를 확인할 수 없습니다.';
+        showAlert('업데이트 확인 중 오류가 발생했습니다.');
+      } finally {
+        updateCheckButton.disabled = false;
+        updateCheckButton.innerHTML = '<i class="bi bi-arrow-repeat me-1"></i> 업데이트 확인';
+      }
+    }
+
+    function renderUpdateInfo(info) {
+      const releases = Array.isArray(info.releases) ? info.releases : [];
+      const latest = info.latest || null;
+      const currentVersion = info.current_version || currentVersionText.textContent;
+      currentVersionText.textContent = currentVersion;
+
+      if (!latest) {
+        latestVersionText.textContent = '릴리즈가 없습니다.';
+        updateInstallForm.hidden = true;
+        releaseList.innerHTML = '';
+        return;
+      }
+
+      latestVersionText.textContent = info.update_available
+        ? `최신 버전 ${latest.tag_name} 업데이트 가능`
+        : `최신 버전 ${latest.tag_name}`;
+      updateInstallForm.hidden = !info.update_available;
+      const installableReleases = releases.filter((release) => release.tag_name && release.is_newer);
+      releaseSelect.innerHTML = installableReleases
+        .map((release) => `<option value="${escapeHtml(release.tag_name)}">${escapeHtml(release.tag_name)}${release.prerelease ? ' (pre-release)' : ''}</option>`)
+        .join('');
+
+      if (latest.tag_name && installableReleases.some((release) => release.tag_name === latest.tag_name)) {
+        releaseSelect.value = latest.tag_name;
+      }
+
+      releaseList.innerHTML = releases.length
+        ? releases.map((release) => `
+          <div class="release-item">
+            <strong>${escapeHtml(release.tag_name)}</strong>
+            <span>${escapeHtml(release.name || release.tag_name)}</span>
+            <small>${escapeHtml(release.published_at || 'tag')}</small>
+          </div>
+        `).join('')
+        : '<p class="text-secondary mb-0">표시할 릴리즈가 없습니다.</p>';
+    }
+
+    loadUpdateInfo(false);
   }
 
   function initPassword() {
@@ -590,6 +1601,8 @@
 
   if (path.endsWith('/dash.php')) initDash();
   if (path.endsWith('/list.php')) initList();
+  if (path.endsWith('/location.php')) initLocation();
   if (path.endsWith('/edit.php')) initEdit();
+  if (path.endsWith('/system.php')) initSystem();
   if (path.endsWith('/password.php')) initPassword();
 })();

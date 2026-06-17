@@ -1,6 +1,9 @@
 <?php
   $studentNoRange = $app->lengthRange('student_no_length', 5, 5);
-  $studentNameRange = $app->lengthRange('student_name_length', 1, 5);
+  $studentNoPattern = $studentNoRange['min'] === $studentNoRange['max']
+    ? '\d{' . $studentNoRange['min'] . '}'
+    : '\d{' . $studentNoRange['min'] . ',' . $studentNoRange['max'] . '}';
+  $studentNameRange = $app->lengthRange('student_name_length', 1, 10);
 ?>
 <!doctype html>
 <html lang="ko">
@@ -22,6 +25,7 @@
         <div class="public-logo-line">
           <img class="brand-logo" src="/assets/logo.png" width="24" height="24" alt="" aria-hidden="true">
           <span class="section-kicker">Self Study Attendance</span>
+          <span class="app-version"><?php echo $h($app->string('app_version')); ?></span>
         </div>
         <div class="attendance-heading-copy">
           <h1>자습 출석 체크</h1>
@@ -32,9 +36,6 @@
             <i class="bi bi-clock"></i>
             <span id="serverTime">현재시간: 불러오는 중...</span>
           </div>
-          <button class="btn btn-light icon-round" id="infoButton" type="button" aria-label="시스템 정보">
-            <i class="bi bi-info-lg"></i>
-          </button>
         </div>
       </header>
 
@@ -46,13 +47,13 @@
         <form id="studentForm">
           <div class="mb-3">
             <label class="form-label" for="studentNoInput">학번</label>
-            <input class="form-control form-control-lg" id="studentNoInput" name="student_no" autocomplete="off" inputmode="numeric" maxlength="<?php echo $h($studentNoRange['max']); ?>" minlength="<?php echo $h($studentNoRange['min']); ?>" placeholder="10101" required>
+            <input class="form-control form-control-lg" id="studentNoInput" name="student_no" autocomplete="off" inputmode="numeric" pattern="<?php echo $h($studentNoPattern); ?>" maxlength="<?php echo $h($studentNoRange['max']); ?>" minlength="<?php echo $h($studentNoRange['min']); ?>" placeholder="10101" required>
             <div class="form-text"><?php echo $h($app->lengthRequirementText('학번은', 'student_no_length', 5, 5)); ?></div>
           </div>
           <div class="mb-4">
             <label class="form-label" for="studentNameInput">이름</label>
             <input class="form-control form-control-lg" id="studentNameInput" name="name" autocomplete="name" maxlength="<?php echo $h($studentNameRange['max']); ?>" minlength="<?php echo $h($studentNameRange['min']); ?>" placeholder="홍길동" required>
-            <div class="form-text"><?php echo $h($app->lengthRequirementText('이름은', 'student_name_length', 1, 5)); ?></div>
+            <div class="form-text"><?php echo $h($app->lengthRequirementText('이름은', 'student_name_length', 1, 10)); ?></div>
           </div>
           <button class="btn btn-success btn-lg w-100" type="submit">
             <i class="bi bi-person-check me-1"></i> 저장하고 시작
@@ -61,14 +62,13 @@
       </section>
 
       <section id="attendanceView" hidden>
-        <div class="student-chip">
+        <div class="student-chip" id="studentChip">
           <span>학생 정보</span>
           <strong id="studentText"></strong>
         </div>
         <button class="btn btn-success btn-lg w-100 attendance-submit" id="attendButton" type="button">
           <i class="bi bi-check2-circle me-1"></i> 출석하기
         </button>
-        <button class="btn btn-link link-success d-block mx-auto text-decoration-none mt-3" id="changeStudentButton" type="button">학생 정보 변경</button>
       </section>
 
       <section id="resultView" hidden>
@@ -86,27 +86,35 @@
     </section>
   </main>
 
-  <div class="modal fade" id="infoModal" tabindex="-1" aria-labelledby="infoTitle" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-      <section class="modal-content">
-        <div class="modal-header">
-          <h2 class="modal-title h5 info-modal-title" id="infoTitle">
-            <i class="bi bi-info-circle" aria-hidden="true"></i>
-            <span>시스템 정보</span>
-          </h2>
-          <button class="btn-close" id="closeInfoButton" type="button" data-bs-dismiss="modal" aria-label="닫기"></button>
+  <div class="student-edit-modal" id="studentEditModal" hidden>
+    <section class="student-edit-dialog" role="dialog" aria-modal="true" aria-labelledby="studentEditTitle">
+      <h2 id="studentEditTitle">학생 정보 수정 확인</h2>
+      <p>관리자 비밀번호를 확인한 뒤 학생 정보를 다시 입력할 수 있습니다.</p>
+      <form id="studentEditVerifyForm">
+        <label class="form-label" for="studentEditPasswordInput">관리자 비밀번호</label>
+        <input class="form-control form-control-lg" id="studentEditPasswordInput" type="password" autocomplete="current-password" required>
+        <div class="student-edit-actions">
+          <button class="btn btn-outline-secondary" id="cancelStudentEditButton" type="button">취소</button>
+          <button class="btn btn-success" id="verifyStudentEditButton" type="submit">확인</button>
         </div>
-        <div class="modal-body">
-          <dl class="info-list" id="infoList">
-            <div><dt>상태</dt><dd>불러오는 중...</dd></div>
-          </dl>
-        </div>
-      </section>
-    </div>
+      </form>
+    </section>
+  </div>
+
+  <div class="student-edit-modal" id="locationConfirmModal" hidden>
+    <section class="student-edit-dialog location-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="locationConfirmTitle">
+      <h2 id="locationConfirmTitle">위치 인증 확인</h2>
+      <p id="locationConfirmMessage">출석을 위해 현재 위치 인증이 필요합니다.</p>
+      <div class="location-help-box" id="locationHelpBox" hidden></div>
+      <div class="student-edit-actions location-confirm-actions">
+        <button class="btn btn-outline-secondary" id="cancelLocationConfirmButton" type="button">취소</button>
+        <button class="btn btn-outline-success" id="requestLocationAgainButton" type="button" hidden>다시 위치 요청</button>
+        <button class="btn btn-success" id="confirmLocationOverrideButton" type="button" hidden>관리자 승인 요청</button>
+      </div>
+    </section>
   </div>
 
   <div id="toastRoot" class="toast-root" aria-live="polite"></div>
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
   <script src="/assets/app.js"></script>
 </body>

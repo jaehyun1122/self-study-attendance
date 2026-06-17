@@ -55,10 +55,6 @@
       if (!status?.installed) {
         installNotice.textContent = '아직 설치되지 않았습니다. POST /api/install.php로 초기 관리자 비밀번호를 설정해주세요.';
       }
-
-      if (status?.php && !status.php.ok) {
-        installNotice.textContent = `PHP ${status.php.required} 이상이 필요합니다. 현재 버전: ${status.php.current}`;
-      }
     } catch (error) {
       installNotice.textContent = '서버 상태를 확인할 수 없습니다.';
     }

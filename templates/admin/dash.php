@@ -7,19 +7,25 @@
 </div>
 
 <div class="row g-3 align-items-stretch mb-3">
-  <div class="col-md-4">
+  <div class="col-md-3">
     <section class="stat-card">
       <span>오늘 출석</span>
       <strong id="todayCount">0건</strong>
     </section>
   </div>
-  <div class="col-md-4">
+  <div class="col-md-3">
     <section class="stat-card">
       <span>전체 출석</span>
       <strong id="totalCount">0건</strong>
     </section>
   </div>
-  <div class="col-md-4">
+  <div class="col-md-3">
+    <section class="stat-card">
+      <span>승인 대기</span>
+      <strong id="pendingCount">0건</strong>
+    </section>
+  </div>
+  <div class="col-md-3">
     <section class="stat-card">
       <span>서버 시간</span>
       <strong class="fs-5" id="summaryServerTime">-</strong>
@@ -28,7 +34,7 @@
 </div>
 
 <div class="row g-3">
-  <div class="col-lg-6">
+  <div class="col-lg-4">
     <a class="admin-action-card" href="/admin/list.php">
       <i class="bi bi-calendar-check"></i>
       <span>
@@ -37,7 +43,25 @@
       </span>
     </a>
   </div>
-  <div class="col-lg-6">
+  <div class="col-lg-4">
+    <a class="admin-action-card" href="/admin/location.php">
+      <i class="bi bi-geo-alt"></i>
+      <span>
+        <strong>위치 설정</strong>
+        <small>출석 가능 위치와 허용 반경을 지도에서 관리합니다.</small>
+      </span>
+    </a>
+  </div>
+  <div class="col-lg-4">
+    <a class="admin-action-card" href="/admin/system.php">
+      <i class="bi bi-tools"></i>
+      <span>
+        <strong>시스템 관리</strong>
+        <small>초기화와 업데이트를 별도 메뉴에서 확인하고 실행합니다.</small>
+      </span>
+    </a>
+  </div>
+  <div class="col-lg-4">
     <a class="admin-action-card" href="/admin/password.php">
       <i class="bi bi-shield-lock"></i>
       <span>
