@@ -4,19 +4,19 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title><?php echo $h($title ?? '관리자'); ?> - <?php echo $h($app->string('app_name')); ?></title>
-  <link rel="icon" type="image/png" href="/assets/logo.png">
-  <link rel="apple-touch-icon" href="/assets/logo.png">
+  <link rel="icon" type="image/png" href="<?php echo $h($asset('/assets/logo.png')); ?>">
+  <link rel="apple-touch-icon" href="<?php echo $h($asset('/assets/logo.png')); ?>">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.css">
-  <link rel="stylesheet" href="/assets/styles.css">
+  <link rel="stylesheet" href="<?php echo $h($asset('/assets/styles.css')); ?>">
 </head>
 <body class="bg-body-tertiary">
   <nav class="navbar navbar-expand-lg bg-white border-bottom sticky-top d-lg-none">
     <div class="container py-2">
       <a class="navbar-brand admin-brand-inline text-success" href="/admin/dash.php">
-        <img class="brand-logo" src="/assets/logo.png" width="24" height="24" alt="" aria-hidden="true">
+        <img class="brand-logo" src="<?php echo $h($asset('/assets/logo.png')); ?>" width="24" height="24" alt="" aria-hidden="true">
         <span><?php echo $h($app->string('app_name')); ?></span>
       </a>
       <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#adminNavbar" aria-controls="adminNavbar" aria-expanded="false" aria-label="메뉴 열기">
@@ -45,7 +45,7 @@
     <aside class="admin-sidebar d-none d-lg-flex">
       <div>
         <a class="admin-brand" href="/admin/dash.php">
-          <img class="brand-logo" src="/assets/logo.png" width="24" height="24" alt="" aria-hidden="true">
+          <img class="brand-logo" src="<?php echo $h($asset('/assets/logo.png')); ?>" width="24" height="24" alt="" aria-hidden="true">
           <span><?php echo $h($app->string('app_name')); ?></span>
         </a>
         <nav class="admin-menu" aria-label="관리자 메뉴">
@@ -82,6 +82,6 @@
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
   <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.js"></script>
-  <script src="/assets/admin.js"></script>
+  <script src="<?php echo $h($asset('/assets/admin.js')); ?>"></script>
 </body>
 </html>

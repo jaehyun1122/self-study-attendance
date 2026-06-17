@@ -368,6 +368,27 @@
     return validateLength(name, '이름은', inputRange(nameInput, 1, 10));
   }
 
+  function initPasswordToggles(root = document) {
+    root.querySelectorAll('[data-password-toggle]').forEach((toggleButton) => {
+      toggleButton.addEventListener('click', () => {
+        const input = document.getElementById(toggleButton.dataset.passwordToggle || '');
+        const icon = toggleButton.querySelector('i');
+
+        if (!input) {
+          return;
+        }
+
+        const visible = input.type === 'text';
+        input.type = visible ? 'password' : 'text';
+        toggleButton.setAttribute('aria-label', visible ? '비밀번호 표시' : '비밀번호 숨기기');
+
+        if (icon) {
+          icon.className = visible ? 'bi bi-eye' : 'bi bi-eye-slash';
+        }
+      });
+    });
+  }
+
   function locationStatusInfo(value) {
     return ({
       verified: ['위치 인증 완료', 'text-bg-success'],
@@ -746,7 +767,7 @@
       document.getElementById('attendanceCount').textContent = '조회 중';
       document.getElementById('attendanceTableBody').innerHTML = `
         <tr>
-          <td class="text-center py-5" colspan="6">
+          <td class="text-center py-5" colspan="7">
             <div class="empty-table-state">
               <div class="loading-spinner" aria-hidden="true"></div>
               <strong>조회 중입니다.</strong>
@@ -761,7 +782,7 @@
       document.getElementById('attendanceCount').textContent = '0건';
       document.getElementById('attendanceTableBody').innerHTML = `
         <tr>
-          <td class="text-center py-5" colspan="6">
+          <td class="text-center py-5" colspan="7">
             <div class="empty-table-state">
               <strong>${escapeHtml(title)}</strong>
               <p class="text-secondary mb-0">${escapeHtml(description)}</p>
@@ -781,7 +802,7 @@
       if (rows.length === 0) {
         body.innerHTML = `
           <tr>
-            <td class="text-center py-5" colspan="6">
+            <td class="text-center py-5" colspan="7">
               <div class="empty-table-state">
                 <strong>출석 기록이 없습니다.</strong>
                 <p class="text-secondary mb-0">선택한 조건에 등록된 출석이 없어요.</p>
@@ -802,9 +823,9 @@
           <td>${escapeHtml(row.student_no)}</td>
           <td class="fw-semibold">${escapeHtml(row.name)}</td>
           <td class="text-nowrap">${escapeHtml(formatDateTimeText(row.attend_datetime || row.created_at || row.attend_date))}</td>
+          <td>${locationStatusHtml(row)}</td>
           <td class="text-end">
             <div class="d-flex justify-content-end gap-2 flex-wrap">
-              <button class="btn btn-sm btn-outline-secondary" type="button" data-location-detail-id="${escapeHtml(row.id)}">위치</button>
               ${row.location_status === 'pending' ? `<button class="btn btn-sm btn-outline-primary" type="button" data-approve-id="${escapeHtml(row.id)}">승인</button>` : ''}
               ${row.location_status === 'pending' ? `<button class="btn btn-sm btn-outline-warning" type="button" data-reject-id="${escapeHtml(row.id)}">반려</button>` : ''}
               <a class="btn btn-sm btn-outline-success" href="/admin/edit.php?id=${encodeURIComponent(row.id)}">수정</a>
@@ -913,6 +934,20 @@
       });
 
       updateSelectionState();
+    }
+
+    function locationStatusHtml(row) {
+      const status = String(row.location_status || 'unchecked');
+      const [label, className] = locationStatusInfo(status);
+      const distance = row.location_distance_meters === null || row.location_distance_meters === undefined || row.location_distance_meters === ''
+        ? ''
+        : `<small class="location-distance">${Number(row.location_distance_meters).toFixed(1)}m</small>`;
+
+      return `
+        <button class="location-status-button" type="button" data-location-detail-id="${escapeHtml(row.id)}">
+          <span class="badge rounded-pill ${className}">${escapeHtml(label)}</span>${distance}
+        </button>
+      `;
     }
 
     function selectedIds() {
@@ -1379,6 +1414,11 @@
     let releasesCache = [];
     let progressTimer = null;
     let progressIndex = 0;
+    let serverInfoServerTime = null;
+    let serverInfoUptimeSeconds = null;
+    let serverInfoClockTimer = null;
+    let serverInfoSyncTimer = null;
+    let serverInfoSyncIntervalMs = DEFAULT_SYNC_INTERVAL_MS;
 
     if (!resetForm || !updateCheckButton) {
       return;
@@ -1431,7 +1471,7 @@
     });
 
     updateCheckButton.addEventListener('click', () => loadUpdateInfo(true));
-    refreshServerInfoButton.addEventListener('click', () => loadServerInfo(true));
+    refreshServerInfoButton.addEventListener('click', () => loadServerInfo(true, true));
     closeReleaseDetailButton.addEventListener('click', closeReleaseDetail);
     releaseDetailModal.addEventListener('click', (event) => {
       if (event.target === releaseDetailModal) {
@@ -1494,29 +1534,41 @@
       }
     });
 
-    async function loadServerInfo(showSuccess = false) {
-      refreshServerInfoButton.disabled = true;
-      refreshServerInfoButton.textContent = '불러오는 중...';
+    async function loadServerInfo(showSuccess = false, showLoading = false) {
+      if (showLoading) {
+        refreshServerInfoButton.disabled = true;
+        refreshServerInfoButton.textContent = '불러오는 중...';
+      }
 
       try {
         const data = await api('/api/admin-system.php', { type: 'server_info' });
         if (!data) return;
 
         if (data.status !== 1) {
-          serverInfoList.innerHTML = '<p class="text-secondary mb-0">서버 정보를 불러오지 못했습니다.</p>';
+          if (showLoading || !serverInfoList.querySelector('[data-server-info-value]')) {
+            serverInfoList.innerHTML = '<p class="text-secondary mb-0">서버 정보를 불러오지 못했습니다.</p>';
+          }
           return;
         }
 
         renderServerInfo(data.result || {});
+        syncServerInfoLive(data.result || {});
+        scheduleServerInfoSync(data.result || {});
 
         if (showSuccess) {
           toast('서버 정보를 새로고침했습니다.');
         }
       } catch (error) {
-        serverInfoList.innerHTML = '<p class="text-secondary mb-0">서버 정보를 불러오지 못했습니다.</p>';
+        scheduleServerInfoSync(null);
+
+        if (showLoading || !serverInfoList.querySelector('[data-server-info-value]')) {
+          serverInfoList.innerHTML = '<p class="text-secondary mb-0">서버 정보를 불러오지 못했습니다.</p>';
+        }
       } finally {
-        refreshServerInfoButton.disabled = false;
-        refreshServerInfoButton.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i> 새로고침';
+        if (showLoading) {
+          refreshServerInfoButton.disabled = false;
+          refreshServerInfoButton.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i> 새로고침';
+        }
       }
     }
 
@@ -1629,19 +1681,19 @@
 
     function renderServerInfo(info) {
       const rows = [
-        ['서버 시간', info.server_time || '-'],
-        ['업타임', info.uptime || '확인 불가'],
-        ['PHP', `${info.php_version || '-'} (${info.php_sapi || '-'})`],
-        ['OS', info.os || '-'],
-        ['시간대', info.timezone || '-'],
-        ['메모리 제한', info.memory_limit || '-'],
-        ['URL fopen', info.allow_url_fopen ? '사용 가능' : '사용 불가'],
+        ['서버 시간', info.server_time || '-', 'server_time'],
+        ['업타임', info.uptime || '확인 불가', 'uptime'],
+        ['PHP', `${info.php_version || '-'} (${info.php_sapi || '-'})`, 'php'],
+        ['OS', info.os || '-', 'os'],
+        ['시간대', info.timezone || '-', 'timezone'],
+        ['메모리 제한', info.memory_limit || '-', 'memory'],
+        ['URL fopen', info.allow_url_fopen ? '사용 가능' : '사용 불가', 'url_fopen'],
       ];
       const extensions = Array.isArray(info.extensions) ? info.extensions : [];
 
       serverInfoList.innerHTML = `
         <dl class="server-info-kv">
-          ${rows.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`).join('')}
+          ${rows.map(([label, value, key]) => `<div><dt>${escapeHtml(label)}</dt><dd data-server-info-value="${escapeHtml(key)}">${escapeHtml(value)}</dd></div>`).join('')}
         </dl>
         <div class="extension-grid">
           ${extensions.map((extension) => `
@@ -1652,6 +1704,75 @@
           `).join('')}
         </div>
       `;
+    }
+
+    function syncServerInfoLive(info) {
+      if (info.server_time) {
+        serverInfoServerTime = parseServerTime(info.server_time);
+      }
+
+      if (Number.isFinite(Number(info.uptime_seconds))) {
+        serverInfoUptimeSeconds = Number(info.uptime_seconds);
+      }
+
+      updateServerInfoLiveText();
+
+      if (serverInfoClockTimer) {
+        return;
+      }
+
+      serverInfoClockTimer = setInterval(() => {
+        if (serverInfoServerTime) {
+          serverInfoServerTime.setSeconds(serverInfoServerTime.getSeconds() + 1);
+        }
+
+        if (serverInfoUptimeSeconds !== null) {
+          serverInfoUptimeSeconds += 1;
+        }
+
+        updateServerInfoLiveText();
+      }, 1000);
+    }
+
+    function updateServerInfoLiveText() {
+      const serverTimeText = serverInfoList.querySelector('[data-server-info-value="server_time"]');
+      const uptimeText = serverInfoList.querySelector('[data-server-info-value="uptime"]');
+
+      if (serverTimeText && serverInfoServerTime) {
+        serverTimeText.textContent = formatDateTime(serverInfoServerTime);
+      }
+
+      if (uptimeText && serverInfoUptimeSeconds !== null) {
+        uptimeText.textContent = formatUptimeSeconds(serverInfoUptimeSeconds);
+      }
+    }
+
+    function formatUptimeSeconds(totalSeconds) {
+      let seconds = Math.max(0, Math.floor(Number(totalSeconds) || 0));
+      const days = Math.floor(seconds / 86400);
+      seconds %= 86400;
+      const hours = Math.floor(seconds / 3600);
+      seconds %= 3600;
+      const minutes = Math.floor(seconds / 60);
+      seconds %= 60;
+
+      return `${days}일 ${String(hours).padStart(2, '0')}시간 ${String(minutes).padStart(2, '0')}분 ${String(seconds).padStart(2, '0')}초`;
+    }
+
+    function scheduleServerInfoSync(info = null) {
+      const nextIntervalMs = syncIntervalMs(info);
+
+      if (serverInfoSyncTimer && nextIntervalMs === serverInfoSyncIntervalMs) {
+        return;
+      }
+
+      serverInfoSyncIntervalMs = nextIntervalMs;
+
+      if (serverInfoSyncTimer) {
+        clearInterval(serverInfoSyncTimer);
+      }
+
+      serverInfoSyncTimer = setInterval(() => loadServerInfo(false, false), serverInfoSyncIntervalMs);
     }
 
     function openUpdateProgress() {
@@ -1691,8 +1812,7 @@
       }, delay);
     }
 
-    loadUpdateInfo(false);
-    loadServerInfo(false);
+    loadServerInfo(false, true);
   }
 
   function initPassword() {
@@ -1702,13 +1822,25 @@
     form.addEventListener('submit', async (event) => {
       event.preventDefault();
       clearAlert();
+      const newPassword = document.getElementById('newPasswordInput').value;
+      const newPasswordConfirm = document.getElementById('newPasswordConfirmInput').value;
+
+      if (!validateLength(newPassword, '새 비밀번호는', inputRange(document.getElementById('newPasswordInput'), 4, 64))) {
+        return;
+      }
+
+      if (newPassword !== newPasswordConfirm) {
+        showAlert('새 비밀번호 확인이 일치하지 않습니다.');
+        return;
+      }
+
       button.disabled = true;
       button.textContent = '변경 중...';
 
       try {
         const data = await api('/api/admin-password.php', {
           old_password: document.getElementById('oldPasswordInput').value,
-          new_password: document.getElementById('newPasswordInput').value,
+          new_password: newPassword,
         });
 
         if (!data) return;
@@ -1730,6 +1862,7 @@
   }
 
   const logoutButtons = document.querySelectorAll('.js-logout-button');
+  initPasswordToggles(document);
   logoutButtons.forEach((logoutButton) => {
     logoutButton.addEventListener('click', async () => {
       try {

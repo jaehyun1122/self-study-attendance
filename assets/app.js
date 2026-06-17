@@ -5,6 +5,7 @@
     api,
     formatDateTime,
     formatDateTimeText,
+    initPasswordToggles,
     inputRange,
     parseServerTime,
     toast,
@@ -402,6 +403,7 @@
   els.backButton.addEventListener('click', render);
   els.studentChip.addEventListener('click', handleStudentChipTap);
 
+  initPasswordToggles(document);
   scheduleStatusSync();
   loadStatus(false);
   render();

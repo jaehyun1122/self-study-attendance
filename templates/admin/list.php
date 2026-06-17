@@ -79,12 +79,15 @@
           <th>
             <button class="table-sort-button" type="button" data-sort-key="created_at">출석일시 <span data-sort-icon="created_at"></span></button>
           </th>
+          <th style="width: 150px;">
+            <button class="table-sort-button" type="button" data-sort-key="location_status">위치 인증 <span data-sort-icon="location_status"></span></button>
+          </th>
           <th class="text-end" style="width: 240px;">관리</th>
         </tr>
       </thead>
       <tbody id="attendanceTableBody">
         <tr>
-          <td class="text-center py-5" colspan="6">
+          <td class="text-center py-5" colspan="7">
             <div class="empty-table-state">
               <div class="loading-spinner" aria-hidden="true"></div>
               <strong>불러오는 중입니다.</strong>

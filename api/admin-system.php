@@ -365,6 +365,7 @@ function findReleaseByTag(array $releases, string $tag): ?array
  */
 function serverInfo(Controller $app): array
 {
+    $uptimeSeconds = serverUptimeSeconds();
     $extensions = [
         ['name' => 'pdo_sqlite', 'label' => 'SQLite DB', 'required' => true, 'loaded' => extension_loaded('pdo_sqlite')],
         ['name' => 'zip', 'label' => '업데이트 압축 해제', 'required' => true, 'loaded' => class_exists('ZipArchive')],
@@ -376,11 +377,13 @@ function serverInfo(Controller $app): array
 
     return [
         'server_time' => $app->now(),
+        'server_time_sync_interval_seconds' => max(1, $app->int('server_time_sync_interval_seconds', 5)),
         'timezone' => date_default_timezone_get(),
         'php_version' => PHP_VERSION,
         'php_sapi' => PHP_SAPI,
-        'os' => PHP_OS_FAMILY . ' ' . php_uname('r'),
-        'uptime' => serverUptime(),
+        'os' => serverOsText(),
+        'uptime' => $uptimeSeconds === null ? null : formatUptime($uptimeSeconds),
+        'uptime_seconds' => $uptimeSeconds,
         'extensions' => $extensions,
         'upload_max_filesize' => ini_get('upload_max_filesize') ?: '',
         'post_max_size' => ini_get('post_max_size') ?: '',
@@ -389,7 +392,7 @@ function serverInfo(Controller $app): array
     ];
 }
 
-function serverUptime(): ?string
+function serverUptimeSeconds(): ?int
 {
     $seconds = null;
 
@@ -414,13 +417,53 @@ function serverUptime(): ?string
         return null;
     }
 
+    return $seconds;
+}
+
+function formatUptime(int $seconds): string
+{
     $days = intdiv($seconds, 86400);
     $seconds %= 86400;
     $hours = intdiv($seconds, 3600);
     $seconds %= 3600;
     $minutes = intdiv($seconds, 60);
+    $seconds %= 60;
 
-    return sprintf('%d일 %02d시간 %02d분', $days, $hours, $minutes);
+    return sprintf('%d일 %02d시간 %02d분 %02d초', $days, $hours, $minutes, $seconds);
+}
+
+function serverOsText(): string
+{
+    $kernel = trim(php_uname('r'));
+
+    if (PHP_OS_FAMILY !== 'Linux') {
+        return trim(PHP_OS_FAMILY . ' ' . $kernel);
+    }
+
+    $prettyName = linuxPrettyName();
+
+    return trim(($prettyName !== '' ? $prettyName . ' ' : '') . 'Linux ' . $kernel);
+}
+
+function linuxPrettyName(): string
+{
+    $path = '/etc/os-release';
+    $contents = is_readable($path) ? file_get_contents($path) : false;
+
+    if (!is_string($contents)) {
+        return '';
+    }
+
+    foreach (explode("\n", $contents) as $line) {
+        if (!str_starts_with($line, 'PRETTY_NAME=')) {
+            continue;
+        }
+
+        $value = trim(substr($line, strlen('PRETTY_NAME=')));
+        return trim($value, " \t\n\r\0\x0B\"'");
+    }
+
+    return '';
 }
 
 /**
@@ -473,6 +516,7 @@ function installRelease(Controller $app, array $release, array $repository): arr
     $backupPath = $backupsDir . DIRECTORY_SEPARATOR . 'pre-update-' . date('Ymd-His') . '.zip';
     createBackup($root, $backupPath);
     copyUpdateFiles($sourceDir, $root);
+    applyDatabaseSchema($app);
     updateConfigVersion($app, $tag);
     removeDirectory($extractDir);
 
@@ -524,7 +568,7 @@ function shouldSkipManagedPath(string $relativePath): bool
         || str_starts_with($path, '.codex/')
         || $path === 'data/config.php'
         || $path === 'data/database.sqlite'
-        || preg_match('#^data/.*\.sqlite$#', $path) === 1
+        || preg_match('#^data/.*\.sqlite(?:-.+)?$#', $path) === 1
         || str_starts_with($path, 'data/updates/')
         || str_starts_with($path, 'data/backups/');
 }
@@ -584,6 +628,47 @@ function copyUpdateFiles(string $sourceDir, string $root): void
             throw new RuntimeException("파일을 업데이트할 수 없습니다: {$relative}");
         }
     }
+}
+
+function applyDatabaseSchema(Controller $app): void
+{
+    $schemaPath = $app->string('schema_path');
+    $schema = is_readable($schemaPath) ? file_get_contents($schemaPath) : false;
+
+    if (!is_string($schema) || trim($schema) === '') {
+        throw new RuntimeException('업데이트된 스키마 파일을 읽을 수 없습니다.');
+    }
+
+    foreach (schemaStatements($schema) as $statement) {
+        applySafeSchemaStatement($app, $statement);
+    }
+}
+
+/**
+ * @return list<string>
+ */
+function schemaStatements(string $schema): array
+{
+    return array_values(array_filter(array_map('trim', explode(';', $schema)), static fn (string $statement): bool => $statement !== ''));
+}
+
+function applySafeSchemaStatement(Controller $app, string $statement): void
+{
+    $normalized = trim(preg_replace('/\s+/', ' ', $statement) ?? '');
+
+    if ($normalized === '') {
+        return;
+    }
+
+    $allowed = preg_match('/^CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\s+/i', $normalized) === 1
+        || preg_match('/^CREATE\s+(UNIQUE\s+)?INDEX\s+IF\s+NOT\s+EXISTS\s+/i', $normalized) === 1
+        || preg_match('/^ALTER\s+TABLE\s+\S+\s+ADD\s+COLUMN\s+/i', $normalized) === 1;
+
+    if (!$allowed) {
+        throw new RuntimeException('데이터 보존을 위해 안전하지 않은 스키마 문장은 실행하지 않습니다.');
+    }
+
+    $app->pdo()->exec($statement);
 }
 
 function updateConfigVersion(Controller $app, string $version): void

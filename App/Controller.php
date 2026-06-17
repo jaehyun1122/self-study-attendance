@@ -585,6 +585,14 @@ final class Controller
         return hash('sha256', $token);
     }
 
+    public function asset(string $path): string
+    {
+        $assetPath = '/' . ltrim($path, '/');
+        $separator = str_contains($assetPath, '?') ? '&' : '?';
+
+        return $assetPath . $separator . 'v=' . rawurlencode($this->string('app_version'));
+    }
+
     public function redirect(string $url): never
     {
         header('Location: ' . $url, true, 302);
@@ -626,6 +634,7 @@ final class Controller
         $cfg = fn (string $key, mixed $default = null): mixed => $this->get($key, $default);
         $cfgString = fn (string $key, string $default = ''): string => $this->string($key, $default);
         $cfgInt = fn (string $key, int $default = 0): int => $this->int($key, $default);
+        $asset = fn (string $path): string => $this->asset($path);
         extract($data, EXTR_SKIP);
 
         ob_start();

@@ -39,7 +39,12 @@
 
       <div class="mt-3">
         <label class="form-label" for="systemResetPasswordInput">관리자 비밀번호</label>
-        <input class="form-control" id="systemResetPasswordInput" type="password" autocomplete="current-password" required>
+        <div class="password-field">
+          <input class="form-control" id="systemResetPasswordInput" type="password" autocomplete="current-password" required>
+          <button class="password-toggle-button" type="button" data-password-toggle="systemResetPasswordInput" aria-label="비밀번호 표시">
+            <i class="bi bi-eye"></i>
+          </button>
+        </div>
       </div>
 
       <div class="system-actions">
@@ -77,7 +82,12 @@
       <select class="form-select" id="releaseSelect"></select>
 
       <label class="form-label mt-3" for="updatePasswordInput">관리자 비밀번호</label>
-      <input class="form-control" id="updatePasswordInput" type="password" autocomplete="current-password" required>
+      <div class="password-field">
+        <input class="form-control" id="updatePasswordInput" type="password" autocomplete="current-password" required>
+        <button class="password-toggle-button" type="button" data-password-toggle="updatePasswordInput" aria-label="비밀번호 표시">
+          <i class="bi bi-eye"></i>
+        </button>
+      </div>
 
       <div class="system-actions">
         <button class="btn btn-success" id="updateInstallButton" type="submit">

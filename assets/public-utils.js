@@ -86,6 +86,27 @@
     return true;
   }
 
+  function initPasswordToggles(root = document) {
+    root.querySelectorAll('[data-password-toggle]').forEach((toggleButton) => {
+      toggleButton.addEventListener('click', () => {
+        const input = document.getElementById(toggleButton.dataset.passwordToggle || '');
+        const icon = toggleButton.querySelector('i');
+
+        if (!input) {
+          return;
+        }
+
+        const visible = input.type === 'text';
+        input.type = visible ? 'password' : 'text';
+        toggleButton.setAttribute('aria-label', visible ? '비밀번호 표시' : '비밀번호 숨기기');
+
+        if (icon) {
+          icon.className = visible ? 'bi bi-eye' : 'bi bi-eye-slash';
+        }
+      });
+    });
+  }
+
   function parseServerTime(value) {
     const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/);
 
@@ -136,6 +157,7 @@
     api,
     formatDateTime,
     formatDateTimeText,
+    initPasswordToggles,
     inputRange,
     parseServerTime,
     toast,

@@ -18,12 +18,20 @@ try {
         $app->error('이미 설치되어 있습니다.', 409);
     }
 
-    $password = trim((string) ($input['password'] ?? $app->string('initial_admin_password')));
+    $configuredInstallPassword = trim($app->string('initial_admin_password'));
+    $installPassword = trim((string) ($input['install_password'] ?? ''));
+    $password = trim((string) ($input['password'] ?? ''));
     $passwordRange = $app->lengthRange('password_length', 4, 64);
     $passwordLength = $app->textLength($password);
 
-    if ($password === '') {
+    if ($configuredInstallPassword === '') {
         $app->error('data/config.php의 initial_admin_password를 설정해주세요.', 500);
+    }
+
+    $app->requireFields($input, ['install_password', 'password']);
+
+    if (!hash_equals($configuredInstallPassword, $installPassword)) {
+        $app->error('설치 승인 비밀번호가 올바르지 않습니다.', 403);
     }
 
     if ($passwordLength < $passwordRange['min'] || $passwordLength > $passwordRange['max']) {

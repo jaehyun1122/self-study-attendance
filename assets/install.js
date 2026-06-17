@@ -1,7 +1,12 @@
 (function () {
   const REDIRECT_DELAY_MS = 900;
+  const installForm = document.getElementById('installForm');
   const installButton = document.getElementById('installButton');
-  const { api, toast } = window.PublicUtils;
+  const installPasswordInput = document.getElementById('installPasswordInput');
+  const adminPasswordInput = document.getElementById('adminPasswordInput');
+  const adminPasswordConfirmInput = document.getElementById('adminPasswordConfirmInput');
+  const { api, initPasswordToggles, inputRange, toast, validateLength } = window.PublicUtils;
+  initPasswordToggles(document);
 
   function redirectHome() {
     setTimeout(() => {
@@ -22,8 +27,25 @@
     }
   }
 
-  installButton?.addEventListener('click', async () => {
+  installForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
     let shouldRestoreButton = true;
+    const password = adminPasswordInput.value.trim();
+    const passwordConfirm = adminPasswordConfirmInput.value.trim();
+
+    if (!installPasswordInput.value.trim()) {
+      toast('설치 승인 비밀번호를 입력해주세요.', 'error');
+      return;
+    }
+
+    if (!validateLength(password, '관리자 비밀번호는', inputRange(adminPasswordInput, 4, 64))) {
+      return;
+    }
+
+    if (password !== passwordConfirm) {
+      toast('새 관리자 비밀번호 확인이 일치하지 않습니다.', 'error');
+      return;
+    }
 
     installButton.disabled = true;
     installButton.innerHTML = '<i class="bi bi-hourglass-split me-1"></i> 설치 중...';
@@ -31,7 +53,10 @@
     try {
       const data = await api('/api/install.php', {
         method: 'POST',
-        body: JSON.stringify({}),
+        body: JSON.stringify({
+          install_password: installPasswordInput.value,
+          password,
+        }),
       });
 
       if (data.status !== 1) {
