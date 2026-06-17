@@ -8,8 +8,8 @@ require_once __DIR__ . '/App/Controller.php';
 
 $app = new Controller();
 
-if (!$app->checkInstalled()) {
-    $app->redirect('/install.php');
+if ($app->checkInstalled()) {
+    $app->redirect('/');
 }
 
-echo $app->renderTemplate('public/index.php');
+echo $app->renderTemplate('public/install.php');

@@ -53,7 +53,7 @@
       const status = data.result;
 
       if (!status?.installed) {
-        installNotice.textContent = '아직 설치되지 않았습니다. POST /api/install.php로 초기 관리자 비밀번호를 설정해주세요.';
+        installNotice.innerHTML = '아직 설치되지 않았습니다. <a href="/install.php">설치 페이지</a>를 먼저 진행해주세요.';
       }
     } catch (error) {
       installNotice.textContent = '서버 상태를 확인할 수 없습니다.';

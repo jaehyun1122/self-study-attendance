@@ -36,6 +36,10 @@ try {
         $app->success('릴리즈 정보를 확인했습니다.', githubReleaseInfo($app));
     }
 
+    if ($type === 'server_info') {
+        $app->success('서버 정보를 불러왔습니다.', serverInfo($app));
+    }
+
     if ($type === 'update_install') {
         $app->requireFields($input, ['password']);
         $app->verifyAdminPassword($input['password'] ?? '', 403);
@@ -101,7 +105,7 @@ function resetSystemData(Controller $app, string $scope): array
  */
 function githubReleaseInfo(Controller $app): array
 {
-    [$owner, $repo] = repositoryParts($app->string('repository_url'));
+    [$owner, $repo] = repositoryParts(configuredRepository($app));
     $repository = [
         'owner' => $owner,
         'repo' => $repo,
@@ -127,8 +131,10 @@ function githubReleaseInfo(Controller $app): array
                 'tag_name' => $tag,
                 'name' => (string) ($release['name'] ?? $tag),
                 'published_at' => (string) ($release['published_at'] ?? ''),
+                'published_at_text' => releaseDateText((string) ($release['published_at'] ?? '')),
                 'html_url' => (string) ($release['html_url'] ?? "https://github.com/{$owner}/{$repo}/releases/tag/{$tag}"),
                 'zip_url' => archiveUrl($owner, $repo, $tag),
+                'body' => (string) ($release['body'] ?? ''),
                 'prerelease' => (bool) ($release['prerelease'] ?? false),
             ];
         }
@@ -154,8 +160,10 @@ function githubReleaseInfo(Controller $app): array
                 'tag_name' => $tag,
                 'name' => $tag,
                 'published_at' => '',
+                'published_at_text' => '태그',
                 'html_url' => "https://github.com/{$owner}/{$repo}/releases/tag/{$tag}",
                 'zip_url' => archiveUrl($owner, $repo, $tag),
+                'body' => '',
                 'prerelease' => false,
             ];
         }
@@ -188,12 +196,27 @@ function githubReleaseInfo(Controller $app): array
     ];
 }
 
+function configuredRepository(Controller $app): string
+{
+    $repository = normalizeRepositoryInput($app->string('update_repository'));
+
+    return $repository !== '' ? $repository : normalizeRepositoryInput($app->string('repository_url'));
+}
+
+function normalizeRepositoryInput(string $repository): string
+{
+    return trim(preg_replace('/\s+/', '', $repository) ?? '');
+}
+
 /**
  * @return array{0: string, 1: string}
  */
 function repositoryParts(string $repositoryUrl): array
 {
-    $path = trim((string) (parse_url($repositoryUrl, PHP_URL_PATH) ?: ''), '/');
+    $repositoryUrl = normalizeRepositoryInput($repositoryUrl);
+    $path = str_contains($repositoryUrl, '://')
+        ? trim((string) (parse_url($repositoryUrl, PHP_URL_PATH) ?: ''), '/')
+        : trim($repositoryUrl, '/');
     $parts = explode('/', preg_replace('/\.git$/', '', $path) ?? '');
 
     if (count($parts) < 2 || $parts[0] === '' || $parts[1] === '') {
@@ -201,6 +224,23 @@ function repositoryParts(string $repositoryUrl): array
     }
 
     return [$parts[0], $parts[1]];
+}
+
+function releaseDateText(string $value): string
+{
+    $value = trim($value);
+
+    if ($value === '') {
+        return '날짜 없음';
+    }
+
+    try {
+        return (new DateTimeImmutable($value))
+            ->setTimezone(new DateTimeZone(date_default_timezone_get()))
+            ->format('Y-m-d H:i:s');
+    } catch (Throwable) {
+        return $value;
+    }
 }
 
 function archiveUrl(string $owner, string $repo, string $tag): string
@@ -318,6 +358,69 @@ function findReleaseByTag(array $releases, string $tag): ?array
     }
 
     return null;
+}
+
+/**
+ * @return array<string, mixed>
+ */
+function serverInfo(Controller $app): array
+{
+    $extensions = [
+        ['name' => 'pdo_sqlite', 'label' => 'SQLite DB', 'required' => true, 'loaded' => extension_loaded('pdo_sqlite')],
+        ['name' => 'zip', 'label' => '업데이트 압축 해제', 'required' => true, 'loaded' => class_exists('ZipArchive')],
+        ['name' => 'openssl', 'label' => 'HTTPS 다운로드', 'required' => true, 'loaded' => extension_loaded('openssl')],
+        ['name' => 'curl', 'label' => 'GitHub API 요청', 'required' => false, 'loaded' => function_exists('curl_init')],
+        ['name' => 'mbstring', 'label' => '문자 길이 처리', 'required' => false, 'loaded' => extension_loaded('mbstring')],
+        ['name' => 'intl', 'label' => '정확한 글자 수 계산', 'required' => false, 'loaded' => extension_loaded('intl')],
+    ];
+
+    return [
+        'server_time' => $app->now(),
+        'timezone' => date_default_timezone_get(),
+        'php_version' => PHP_VERSION,
+        'php_sapi' => PHP_SAPI,
+        'os' => PHP_OS_FAMILY . ' ' . php_uname('r'),
+        'uptime' => serverUptime(),
+        'extensions' => $extensions,
+        'upload_max_filesize' => ini_get('upload_max_filesize') ?: '',
+        'post_max_size' => ini_get('post_max_size') ?: '',
+        'memory_limit' => ini_get('memory_limit') ?: '',
+        'allow_url_fopen' => filter_var(ini_get('allow_url_fopen'), FILTER_VALIDATE_BOOL),
+    ];
+}
+
+function serverUptime(): ?string
+{
+    $seconds = null;
+
+    if (is_readable('/proc/uptime')) {
+        $contents = file_get_contents('/proc/uptime');
+        $seconds = is_string($contents) ? (int) floor((float) strtok($contents, ' ')) : null;
+    }
+
+    if ($seconds === null && PHP_OS_FAMILY === 'Windows' && function_exists('shell_exec')) {
+        $output = @shell_exec('wmic os get lastbootuptime /value 2>NUL');
+
+        if (is_string($output) && preg_match('/LastBootUpTime=(\d{14})/', $output, $matches)) {
+            $boot = DateTimeImmutable::createFromFormat('YmdHis', $matches[1]);
+
+            if ($boot instanceof DateTimeImmutable) {
+                $seconds = time() - $boot->getTimestamp();
+            }
+        }
+    }
+
+    if ($seconds === null || $seconds < 0) {
+        return null;
+    }
+
+    $days = intdiv($seconds, 86400);
+    $seconds %= 86400;
+    $hours = intdiv($seconds, 3600);
+    $seconds %= 3600;
+    $minutes = intdiv($seconds, 60);
+
+    return sprintf('%d일 %02d시간 %02d분', $days, $hours, $minutes);
 }
 
 /**

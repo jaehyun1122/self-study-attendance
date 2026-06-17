@@ -16,13 +16,8 @@
 
 1. 프로젝트를 웹 서버에 배포합니다.
 2. `data/` 폴더에 쓰기 권한을 부여합니다.
-3. 설치 API로 단일 관리자 초기 비밀번호를 설정합니다.
-
-```bash
-curl -X POST http://localhost:8000/api/install.php \
-  -H "Content-Type: application/json" \
-  -d "{\"password\":\"admin1234\"}"
-```
+3. `data/config.php`의 `initial_admin_password` 값을 원하는 초기 관리자 비밀번호로 설정합니다.
+4. 브라우저에서 `/install.php`에 접속해 설치 마법사를 실행합니다.
 
 설치 시 `data/schema.sql`을 읽어 SQLite 테이블을 생성합니다. `data/database.sqlite`는 런타임에 생성되며 Git에는 포함하지 않습니다.
 
@@ -118,8 +113,12 @@ api/
 
 assets/
   app.js
+  attendance-location.js
+  install.js
+  public-utils.js
   admin.js
   admin-login.js
+  public.css
   styles.css
 
 data/
@@ -130,6 +129,7 @@ data/
 templates/
   public/
     index.php
+    install.php
   admin/
     login.php
     layout.php

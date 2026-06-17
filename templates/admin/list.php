@@ -21,6 +21,17 @@
         <label class="form-label" for="keywordFilterInput">검색</label>
         <input class="form-control" id="keywordFilterInput" type="search" autocomplete="off" placeholder="학번 또는 이름">
       </div>
+      <div>
+        <label class="form-label" for="locationStatusFilterInput">위치 인증</label>
+        <select class="form-select" id="locationStatusFilterInput" name="location_status">
+          <option value="">전체</option>
+          <option value="unchecked">미사용</option>
+          <option value="verified">인증 완료</option>
+          <option value="pending">승인 대기</option>
+          <option value="approved">관리자 승인</option>
+          <option value="rejected">반려</option>
+        </select>
+      </div>
     </div>
     <input id="sortByInput" type="hidden" value="created_at">
     <input id="sortOrderInput" type="hidden" value="asc">
@@ -68,15 +79,12 @@
           <th>
             <button class="table-sort-button" type="button" data-sort-key="created_at">출석일시 <span data-sort-icon="created_at"></span></button>
           </th>
-          <th style="width: 170px;">
-            <button class="table-sort-button" type="button" data-sort-key="location_status">위치 인증 <span data-sort-icon="location_status"></span></button>
-          </th>
           <th class="text-end" style="width: 240px;">관리</th>
         </tr>
       </thead>
       <tbody id="attendanceTableBody">
         <tr>
-          <td class="text-center py-5" colspan="7">
+          <td class="text-center py-5" colspan="6">
             <div class="empty-table-state">
               <div class="loading-spinner" aria-hidden="true"></div>
               <strong>불러오는 중입니다.</strong>

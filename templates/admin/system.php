@@ -64,6 +64,7 @@
       <strong id="currentVersionText"><?php echo $h($app->string('app_version')); ?></strong>
       <small id="latestVersionText">릴리즈 정보를 확인해주세요.</small>
     </div>
+    <p class="form-text mt-2 mb-0">업데이트 저장소는 <code>data/config.php</code>의 <code>update_repository</code> 값으로 설정합니다.</p>
 
     <div class="system-actions">
       <button class="btn btn-outline-success" id="updateCheckButton" type="button">
@@ -86,5 +87,53 @@
     </form>
 
     <div class="release-list" id="releaseList"></div>
+  </section>
+
+  <section class="admin-card form-card system-card">
+    <div class="system-card-heading">
+      <div>
+        <span class="section-kicker">Server</span>
+        <h2>서버 정보</h2>
+      </div>
+      <i class="bi bi-hdd-network"></i>
+    </div>
+
+    <div class="server-info-list" id="serverInfoList">
+      <div class="empty-table-state">
+        <div class="loading-spinner" aria-hidden="true"></div>
+        <strong>서버 정보를 불러오는 중입니다.</strong>
+      </div>
+    </div>
+
+    <div class="system-actions">
+      <button class="btn btn-outline-secondary" id="refreshServerInfoButton" type="button">
+        <i class="bi bi-arrow-clockwise me-1"></i> 새로고침
+      </button>
+    </div>
+  </section>
+</div>
+
+<div class="admin-modal" id="releaseDetailModal" hidden>
+  <section class="admin-modal-dialog release-detail-dialog" role="dialog" aria-modal="true" aria-labelledby="releaseDetailTitle">
+    <div class="admin-modal-header">
+      <h2 id="releaseDetailTitle">릴리즈 정보</h2>
+      <button class="btn btn-sm btn-outline-secondary" id="closeReleaseDetailButton" type="button" aria-label="닫기">
+        <i class="bi bi-x-lg"></i>
+      </button>
+    </div>
+    <div class="release-detail-meta" id="releaseDetailMeta"></div>
+    <pre class="release-detail-body" id="releaseDetailBody"></pre>
+  </section>
+</div>
+
+<div class="admin-modal" id="updateProgressModal" hidden>
+  <section class="admin-modal-dialog update-progress-dialog" role="dialog" aria-modal="true" aria-labelledby="updateProgressTitle">
+    <div class="admin-modal-header">
+      <h2 id="updateProgressTitle">업데이트 중</h2>
+    </div>
+    <div class="update-progress-bar" aria-hidden="true">
+      <span id="updateProgressFill"></span>
+    </div>
+    <ol class="update-progress-steps" id="updateProgressSteps"></ol>
   </section>
 </div>

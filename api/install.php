@@ -13,18 +13,21 @@ try {
     $app->requireMethod('POST');
 
     $input = $app->jsonInput();
-    $app->requireFields($input, ['password']);
-
-    $password = trim((string) $input['password']);
-    $passwordRange = $app->lengthRange('password_length', 4, 64);
-    $passwordLength = $app->textLength($password);
-
-    if ($passwordLength < $passwordRange['min'] || $passwordLength > $passwordRange['max']) {
-        $app->error($app->lengthRequirementText('관리자 비밀번호는', 'password_length', 4, 64), 400);
-    }
 
     if ($app->checkInstalled()) {
         $app->error('이미 설치되어 있습니다.', 409);
+    }
+
+    $password = trim((string) ($input['password'] ?? $app->string('initial_admin_password')));
+    $passwordRange = $app->lengthRange('password_length', 4, 64);
+    $passwordLength = $app->textLength($password);
+
+    if ($password === '') {
+        $app->error('data/config.php의 initial_admin_password를 설정해주세요.', 500);
+    }
+
+    if ($passwordLength < $passwordRange['min'] || $passwordLength > $passwordRange['max']) {
+        $app->error($app->lengthRequirementText('관리자 비밀번호는', 'password_length', 4, 64), 400);
     }
 
     $schemaPath = $app->string('schema_path');

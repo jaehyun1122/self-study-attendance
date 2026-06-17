@@ -1,0 +1,144 @@
+(function () {
+  function toast(message, type = 'success') {
+    if (window.Toastify) {
+      window.Toastify({
+        text: message,
+        duration: 2400,
+        gravity: 'top',
+        position: 'center',
+        stopOnFocus: true,
+        style: {
+          background: type === 'error' ? '#c2410c' : '#10805f',
+          borderRadius: '8px',
+          boxShadow: '0 14px 40px rgba(21, 80, 56, 0.18)',
+        },
+      }).showToast();
+      return;
+    }
+
+    const root = document.getElementById('toastRoot');
+    if (!root) return;
+
+    const item = document.createElement('div');
+    item.className = `fallback-toast ${type}`;
+    item.textContent = message;
+    root.appendChild(item);
+    setTimeout(() => item.remove(), 2400);
+  }
+
+  async function api(url, options = {}) {
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(options.headers || {}),
+      },
+    });
+
+    const data = await response.json().catch(() => null);
+
+    if (!data) {
+      throw new Error('서버 응답을 읽을 수 없습니다.');
+    }
+
+    return data;
+  }
+
+  function textLength(value) {
+    const text = String(value || '');
+
+    if (window.Intl?.Segmenter) {
+      return Array.from(new Intl.Segmenter('ko', { granularity: 'grapheme' }).segment(text)).length;
+    }
+
+    return Array.from(text).length;
+  }
+
+  function inputRange(input, fallbackMin, fallbackMax) {
+    const min = Number(input?.getAttribute('minlength') || fallbackMin);
+    const max = Number(input?.getAttribute('maxlength') || fallbackMax);
+    return {
+      min: Number.isFinite(min) ? min : fallbackMin,
+      max: Number.isFinite(max) ? max : fallbackMax,
+    };
+  }
+
+  function lengthMessage(subject, range) {
+    if (range.min === range.max) {
+      return `${subject} ${range.min}자로 입력해주세요.`;
+    }
+
+    if (range.min < 1) {
+      return `${subject} ${range.max}자까지 입력할 수 있습니다.`;
+    }
+
+    return `${subject} ${range.min}자 이상 ${range.max}자까지 입력할 수 있습니다.`;
+  }
+
+  function validateLength(value, subject, range) {
+    const length = textLength(value);
+
+    if (length < range.min || length > range.max) {
+      toast(lengthMessage(subject, range), 'error');
+      return false;
+    }
+
+    return true;
+  }
+
+  function parseServerTime(value) {
+    const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/);
+
+    if (!match) {
+      return new Date();
+    }
+
+    return new Date(
+      Number(match[1]),
+      Number(match[2]) - 1,
+      Number(match[3]),
+      Number(match[4]),
+      Number(match[5]),
+      Number(match[6])
+    );
+  }
+
+  function formatDateTime(date) {
+    const yyyy = date.getFullYear();
+    const mm = String(date.getMonth() + 1).padStart(2, '0');
+    const dd = String(date.getDate()).padStart(2, '0');
+    const hh = String(date.getHours()).padStart(2, '0');
+    const mi = String(date.getMinutes()).padStart(2, '0');
+    const ss = String(date.getSeconds()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd} ${hh}:${mi}:${ss}`;
+  }
+
+  function formatDateTimeText(value) {
+    const text = String(value || '').trim();
+
+    if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(text)) {
+      return text;
+    }
+
+    if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(text)) {
+      return `${text}:00`;
+    }
+
+    if (/^\d{4}-\d{2}-\d{2}$/.test(text)) {
+      return `${text} 00:00:00`;
+    }
+
+    const date = new Date(text);
+    return Number.isNaN(date.getTime()) ? text : formatDateTime(date);
+  }
+
+  window.PublicUtils = {
+    api,
+    formatDateTime,
+    formatDateTimeText,
+    inputRange,
+    parseServerTime,
+    toast,
+    validateLength,
+  };
+})();

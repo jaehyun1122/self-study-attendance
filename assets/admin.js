@@ -124,12 +124,7 @@
   }
 
   function showAlert(message, type = 'danger') {
-    openAdminDialog({
-      title: type === 'danger' ? '알림' : '확인',
-      message,
-      type: type === 'danger' ? 'danger' : 'success',
-      confirmText: '확인',
-    });
+    toast(message, type === 'danger' ? 'error' : 'success');
   }
 
   function clearAlert() {
@@ -458,6 +453,7 @@
     const startDateInput = document.getElementById('startDateInput');
     const endDateInput = document.getElementById('endDateInput');
     const keywordFilterInput = document.getElementById('keywordFilterInput');
+    const locationStatusFilterInput = document.getElementById('locationStatusFilterInput');
     const sortByInput = document.getElementById('sortByInput');
     const sortOrderInput = document.getElementById('sortOrderInput');
     const form = document.getElementById('attendanceFilter');
@@ -480,6 +476,7 @@
     startDateInput.value = params.get('start_date') || params.get('date') || todayForInput();
     endDateInput.value = params.get('end_date') || params.get('date') || startDateInput.value;
     keywordFilterInput.value = params.get('keyword') || params.get('student_no') || params.get('name') || '';
+    locationStatusFilterInput.value = params.get('location_status') || '';
     sortByInput.value = params.get('sort_by') || 'created_at';
     sortOrderInput.value = params.get('sort_order') || 'asc';
 
@@ -517,7 +514,11 @@
     nextFilterButton.addEventListener('click', () => moveFilterHistory(1));
 
     exportButton.addEventListener('click', () => {
-      exportCsv(currentRows);
+      const ids = selectedIds();
+      const rows = ids.length > 0
+        ? currentRows.filter((row) => ids.includes(Number(row.id)))
+        : currentRows;
+      exportCsv(rows, ids.length > 0);
     });
 
     selectAllRowsInput.addEventListener('change', () => {
@@ -614,6 +615,7 @@
         start_date: startDateInput.value,
         end_date: endDateInput.value,
         keyword: keywordFilterInput.value.trim(),
+        location_status: locationStatusFilterInput.value,
         sort_by: sortByInput.value,
         sort_order: sortOrderInput.value,
       };
@@ -643,6 +645,7 @@
         start_date: filters.start_date || '',
         end_date: filters.end_date || '',
         keyword: filters.keyword || '',
+        location_status: filters.location_status || '',
         sort_by: filters.sort_by || 'created_at',
         sort_order: filters.sort_order || 'asc',
       };
@@ -717,6 +720,7 @@
       startDateInput.value = normalized.start_date;
       endDateInput.value = normalized.end_date;
       keywordFilterInput.value = normalized.keyword;
+      locationStatusFilterInput.value = normalized.location_status;
       sortByInput.value = normalized.sort_by;
       sortOrderInput.value = normalized.sort_order;
       updateSortIndicators();
@@ -742,7 +746,7 @@
       document.getElementById('attendanceCount').textContent = '조회 중';
       document.getElementById('attendanceTableBody').innerHTML = `
         <tr>
-          <td class="text-center py-5" colspan="7">
+          <td class="text-center py-5" colspan="6">
             <div class="empty-table-state">
               <div class="loading-spinner" aria-hidden="true"></div>
               <strong>조회 중입니다.</strong>
@@ -757,7 +761,7 @@
       document.getElementById('attendanceCount').textContent = '0건';
       document.getElementById('attendanceTableBody').innerHTML = `
         <tr>
-          <td class="text-center py-5" colspan="7">
+          <td class="text-center py-5" colspan="6">
             <div class="empty-table-state">
               <strong>${escapeHtml(title)}</strong>
               <p class="text-secondary mb-0">${escapeHtml(description)}</p>
@@ -777,7 +781,7 @@
       if (rows.length === 0) {
         body.innerHTML = `
           <tr>
-            <td class="text-center py-5" colspan="7">
+            <td class="text-center py-5" colspan="6">
               <div class="empty-table-state">
                 <strong>출석 기록이 없습니다.</strong>
                 <p class="text-secondary mb-0">선택한 조건에 등록된 출석이 없어요.</p>
@@ -798,9 +802,9 @@
           <td>${escapeHtml(row.student_no)}</td>
           <td class="fw-semibold">${escapeHtml(row.name)}</td>
           <td class="text-nowrap">${escapeHtml(formatDateTimeText(row.attend_datetime || row.created_at || row.attend_date))}</td>
-          <td>${locationStatusHtml(row)}</td>
           <td class="text-end">
-            <div class="d-flex justify-content-end gap-2">
+            <div class="d-flex justify-content-end gap-2 flex-wrap">
+              <button class="btn btn-sm btn-outline-secondary" type="button" data-location-detail-id="${escapeHtml(row.id)}">위치</button>
               ${row.location_status === 'pending' ? `<button class="btn btn-sm btn-outline-primary" type="button" data-approve-id="${escapeHtml(row.id)}">승인</button>` : ''}
               ${row.location_status === 'pending' ? `<button class="btn btn-sm btn-outline-warning" type="button" data-reject-id="${escapeHtml(row.id)}">반려</button>` : ''}
               <a class="btn btn-sm btn-outline-success" href="/admin/edit.php?id=${encodeURIComponent(row.id)}">수정</a>
@@ -911,20 +915,6 @@
       updateSelectionState();
     }
 
-    function locationStatusHtml(row) {
-      const status = String(row.location_status || 'unchecked');
-      const [label, className] = locationStatusInfo(status);
-      const distance = row.location_distance_meters === null || row.location_distance_meters === undefined
-        ? ''
-        : `<small class="location-distance">${Number(row.location_distance_meters).toFixed(1)}m</small>`;
-
-      return `
-        <button class="location-status-button" type="button" data-location-detail-id="${escapeHtml(row.id)}">
-          <span class="badge rounded-pill ${className}">${label}</span>${distance}
-        </button>
-      `;
-    }
-
     function selectedIds() {
       return Array.from(document.querySelectorAll('[data-row-select]:checked'))
         .map((checkbox) => Number(checkbox.dataset.rowSelect))
@@ -1029,9 +1019,9 @@
       }
     }
 
-    function exportCsv(rows) {
+    function exportCsv(rows, selectedOnly = false) {
       if (rows.length === 0) {
-        toast('내보낼 출석 기록이 없습니다.', 'error');
+        toast(selectedOnly ? '선택한 출석 기록이 없습니다.' : '내보낼 출석 기록이 없습니다.', 'error');
         return;
       }
 
@@ -1375,6 +1365,20 @@
     const releaseList = document.getElementById('releaseList');
     const currentVersionText = document.getElementById('currentVersionText');
     const latestVersionText = document.getElementById('latestVersionText');
+    const releaseDetailModal = document.getElementById('releaseDetailModal');
+    const closeReleaseDetailButton = document.getElementById('closeReleaseDetailButton');
+    const releaseDetailTitle = document.getElementById('releaseDetailTitle');
+    const releaseDetailMeta = document.getElementById('releaseDetailMeta');
+    const releaseDetailBody = document.getElementById('releaseDetailBody');
+    const updateProgressModal = document.getElementById('updateProgressModal');
+    const updateProgressFill = document.getElementById('updateProgressFill');
+    const updateProgressSteps = document.getElementById('updateProgressSteps');
+    const serverInfoList = document.getElementById('serverInfoList');
+    const refreshServerInfoButton = document.getElementById('refreshServerInfoButton');
+    const progressStages = ['다운로드 중', '백업 중', '설치 중', '적용 중', '마무리 하는 중'];
+    let releasesCache = [];
+    let progressTimer = null;
+    let progressIndex = 0;
 
     if (!resetForm || !updateCheckButton) {
       return;
@@ -1427,6 +1431,13 @@
     });
 
     updateCheckButton.addEventListener('click', () => loadUpdateInfo(true));
+    refreshServerInfoButton.addEventListener('click', () => loadServerInfo(true));
+    closeReleaseDetailButton.addEventListener('click', closeReleaseDetail);
+    releaseDetailModal.addEventListener('click', (event) => {
+      if (event.target === releaseDetailModal) {
+        closeReleaseDetail();
+      }
+    });
 
     updateInstallForm.addEventListener('submit', async (event) => {
       event.preventDefault();
@@ -1451,6 +1462,7 @@
 
       updateInstallButton.disabled = true;
       updateInstallButton.textContent = '업데이트 중...';
+      openUpdateProgress();
 
       try {
         const data = await api('/api/admin-system.php', {
@@ -1461,28 +1473,52 @@
         if (!data) return;
 
         if (data.status !== 1) {
+          closeUpdateProgress();
           showAlert(data.msg || '업데이트에 실패했습니다.');
           return;
         }
 
+        finishUpdateProgress();
         updatePasswordInput.value = '';
         const installedVersion = data.result?.installed_version || tag;
         currentVersionText.textContent = installedVersion;
-        toast(`${installedVersion} 버전으로 업데이트되었습니다.`);
-        await openAdminDialog({
-          title: '업데이트 완료',
-          message: `업데이트가 완료되었습니다. 백업 파일: ${data.result?.backup_path || '-'}`,
-          type: 'success',
-          confirmText: '확인',
-        });
+        toast(`${installedVersion} 버전으로 업데이트되었습니다. 백업: ${data.result?.backup_path || '-'}`);
         loadUpdateInfo(false);
+        loadServerInfo(false);
       } catch (error) {
+        closeUpdateProgress();
         showAlert('업데이트 중 오류가 발생했습니다.');
       } finally {
         updateInstallButton.disabled = false;
         updateInstallButton.innerHTML = '<i class="bi bi-download me-1"></i> 다운로드 후 업그레이드';
       }
     });
+
+    async function loadServerInfo(showSuccess = false) {
+      refreshServerInfoButton.disabled = true;
+      refreshServerInfoButton.textContent = '불러오는 중...';
+
+      try {
+        const data = await api('/api/admin-system.php', { type: 'server_info' });
+        if (!data) return;
+
+        if (data.status !== 1) {
+          serverInfoList.innerHTML = '<p class="text-secondary mb-0">서버 정보를 불러오지 못했습니다.</p>';
+          return;
+        }
+
+        renderServerInfo(data.result || {});
+
+        if (showSuccess) {
+          toast('서버 정보를 새로고침했습니다.');
+        }
+      } catch (error) {
+        serverInfoList.innerHTML = '<p class="text-secondary mb-0">서버 정보를 불러오지 못했습니다.</p>';
+      } finally {
+        refreshServerInfoButton.disabled = false;
+        refreshServerInfoButton.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i> 새로고침';
+      }
+    }
 
     async function loadUpdateInfo(showSuccess) {
       updateCheckButton.disabled = true;
@@ -1513,7 +1549,7 @@
     }
 
     function renderUpdateInfo(info) {
-      const releases = Array.isArray(info.releases) ? info.releases : [];
+      releasesCache = Array.isArray(info.releases) ? info.releases : [];
       const latest = info.latest || null;
       const currentVersion = info.current_version || currentVersionText.textContent;
       currentVersionText.textContent = currentVersion;
@@ -1529,7 +1565,7 @@
         ? `최신 버전 ${latest.tag_name} 업데이트 가능`
         : `최신 버전 ${latest.tag_name}`;
       updateInstallForm.hidden = !info.update_available;
-      const installableReleases = releases.filter((release) => release.tag_name && release.is_newer);
+      const installableReleases = releasesCache.filter((release) => release.tag_name && release.is_newer);
       releaseSelect.innerHTML = installableReleases
         .map((release) => `<option value="${escapeHtml(release.tag_name)}">${escapeHtml(release.tag_name)}${release.prerelease ? ' (pre-release)' : ''}</option>`)
         .join('');
@@ -1538,18 +1574,125 @@
         releaseSelect.value = latest.tag_name;
       }
 
-      releaseList.innerHTML = releases.length
-        ? releases.map((release) => `
-          <div class="release-item">
+      releaseList.innerHTML = releasesCache.length
+        ? releasesCache.map((release, index) => `
+          <button class="release-item release-item-button" type="button" data-release-index="${index}">
             <strong>${escapeHtml(release.tag_name)}</strong>
             <span>${escapeHtml(release.name || release.tag_name)}</span>
-            <small>${escapeHtml(release.published_at || 'tag')}</small>
-          </div>
+            <small>${escapeHtml(release.published_at_text || formatReleaseDate(release.published_at) || '태그')}</small>
+          </button>
         `).join('')
         : '<p class="text-secondary mb-0">표시할 릴리즈가 없습니다.</p>';
+
+      releaseList.querySelectorAll('[data-release-index]').forEach((button) => {
+        button.addEventListener('click', () => {
+          const release = releasesCache[Number(button.dataset.releaseIndex)];
+          if (release) {
+            openReleaseDetail(release);
+          }
+        });
+      });
+    }
+
+    function formatReleaseDate(value) {
+      const date = new Date(value || '');
+
+      if (Number.isNaN(date.getTime())) {
+        return '';
+      }
+
+      return [
+        date.getFullYear(),
+        String(date.getMonth() + 1).padStart(2, '0'),
+        String(date.getDate()).padStart(2, '0'),
+      ].join('-') + ' ' + [
+        String(date.getHours()).padStart(2, '0'),
+        String(date.getMinutes()).padStart(2, '0'),
+        String(date.getSeconds()).padStart(2, '0'),
+      ].join(':');
+    }
+
+    function openReleaseDetail(release) {
+      releaseDetailTitle.textContent = release.tag_name || '릴리즈 정보';
+      releaseDetailMeta.innerHTML = `
+        <span>${escapeHtml(release.name || release.tag_name || '-')}</span>
+        <span>${escapeHtml(release.published_at_text || formatReleaseDate(release.published_at) || '날짜 없음')}</span>
+        ${release.prerelease ? '<span>Pre-release</span>' : ''}
+      `;
+      releaseDetailBody.textContent = (release.body || '').trim() || '릴리즈 상세 내용이 없습니다.';
+      releaseDetailModal.hidden = false;
+    }
+
+    function closeReleaseDetail() {
+      releaseDetailModal.hidden = true;
+    }
+
+    function renderServerInfo(info) {
+      const rows = [
+        ['서버 시간', info.server_time || '-'],
+        ['업타임', info.uptime || '확인 불가'],
+        ['PHP', `${info.php_version || '-'} (${info.php_sapi || '-'})`],
+        ['OS', info.os || '-'],
+        ['시간대', info.timezone || '-'],
+        ['메모리 제한', info.memory_limit || '-'],
+        ['URL fopen', info.allow_url_fopen ? '사용 가능' : '사용 불가'],
+      ];
+      const extensions = Array.isArray(info.extensions) ? info.extensions : [];
+
+      serverInfoList.innerHTML = `
+        <dl class="server-info-kv">
+          ${rows.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`).join('')}
+        </dl>
+        <div class="extension-grid">
+          ${extensions.map((extension) => `
+            <span class="extension-pill ${extension.loaded ? 'is-ok' : 'is-missing'}">
+              ${escapeHtml(extension.name)}
+              <small>${extension.loaded ? '설치됨' : (extension.required ? '필수' : '선택')}</small>
+            </span>
+          `).join('')}
+        </div>
+      `;
+    }
+
+    function openUpdateProgress() {
+      progressIndex = 0;
+      renderUpdateProgress();
+      updateProgressModal.hidden = false;
+      progressTimer = setInterval(() => {
+        progressIndex = Math.min(progressStages.length - 1, progressIndex + 1);
+        renderUpdateProgress();
+      }, 1800);
+    }
+
+    function renderUpdateProgress() {
+      const percent = Math.round(((progressIndex + 1) / progressStages.length) * 100);
+      updateProgressFill.style.width = `${percent}%`;
+      updateProgressSteps.innerHTML = progressStages.map((stage, index) => `
+        <li class="${index < progressIndex ? 'is-done' : (index === progressIndex ? 'is-active' : '')}">
+          ${escapeHtml(stage)}
+        </li>
+      `).join('');
+    }
+
+    function finishUpdateProgress() {
+      progressIndex = progressStages.length - 1;
+      renderUpdateProgress();
+      closeUpdateProgress(450);
+    }
+
+    function closeUpdateProgress(delay = 0) {
+      if (progressTimer) {
+        clearInterval(progressTimer);
+        progressTimer = null;
+      }
+
+      setTimeout(() => {
+        updateProgressModal.hidden = true;
+      }, delay);
     }
 
     loadUpdateInfo(false);
+    loadServerInfo(false);
   }
 
   function initPassword() {

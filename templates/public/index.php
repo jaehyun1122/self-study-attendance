@@ -17,6 +17,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
   <link rel="stylesheet" href="/assets/styles.css">
+  <link rel="stylesheet" href="/assets/public.css">
 </head>
 <body class="attendance-body">
   <main class="attendance-shell">
@@ -116,6 +117,8 @@
 
   <div id="toastRoot" class="toast-root" aria-live="polite"></div>
   <script src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
+  <script src="/assets/public-utils.js"></script>
+  <script src="/assets/attendance-location.js"></script>
   <script src="/assets/app.js"></script>
 </body>
 </html>
