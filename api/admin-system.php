@@ -441,8 +441,13 @@ function serverOsText(): string
     }
 
     $prettyName = linuxPrettyName();
+    $kernelText = trim('Linux ' . $kernel);
 
-    return trim(($prettyName !== '' ? $prettyName . ' ' : '') . 'Linux ' . $kernel);
+    if ($prettyName === '') {
+        return $kernelText;
+    }
+
+    return "{$prettyName} ({$kernelText})";
 }
 
 function linuxPrettyName(): string

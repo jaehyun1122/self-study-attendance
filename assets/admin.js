@@ -123,6 +123,10 @@
     });
   }
 
+  function wait(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
   function showAlert(message, type = 'danger') {
     toast(message, type === 'danger' ? 'error' : 'success');
   }
@@ -1532,8 +1536,16 @@
         finishUpdateProgress();
         updatePasswordInput.value = '';
         const installedVersion = data.result?.installed_version || tag;
+        const backupPath = data.result?.backup_path || '-';
         currentVersionText.textContent = installedVersion;
-        toast(`${installedVersion} 버전으로 업데이트되었습니다. 백업: ${data.result?.backup_path || '-'}`);
+        await wait(500);
+        await openAdminDialog({
+          title: '업데이트 완료',
+          message: `${installedVersion} 업데이트 완료\n백업 ${backupPath}`,
+          confirmText: '확인',
+          confirmClass: 'btn-success',
+          type: 'info',
+        });
       } catch (error) {
         closeUpdateProgress();
         showAlert('업데이트 중 오류가 발생했습니다.');
