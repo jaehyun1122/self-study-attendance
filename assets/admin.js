@@ -825,7 +825,7 @@
           <td class="text-nowrap">${escapeHtml(formatDateTimeText(row.attend_datetime || row.created_at || row.attend_date))}</td>
           <td>${locationStatusHtml(row)}</td>
           <td class="text-end">
-            <div class="d-flex justify-content-end gap-2 flex-wrap">
+            <div class="attendance-row-actions">
               ${row.location_status === 'pending' ? `<button class="btn btn-sm btn-outline-primary" type="button" data-approve-id="${escapeHtml(row.id)}">승인</button>` : ''}
               ${row.location_status === 'pending' ? `<button class="btn btn-sm btn-outline-warning" type="button" data-reject-id="${escapeHtml(row.id)}">반려</button>` : ''}
               <a class="btn btn-sm btn-outline-success" href="/admin/edit.php?id=${encodeURIComponent(row.id)}">수정</a>
@@ -1103,6 +1103,7 @@
   function initLocation() {
     const form = document.getElementById('locationForm');
     const enabledInput = document.getElementById('locationEnabledInput');
+    const enabledState = document.getElementById('locationEnabledState');
     const latitudeInput = document.getElementById('latitudeInput');
     const longitudeInput = document.getElementById('longitudeInput');
     const radiusInput = document.getElementById('radiusInput');
@@ -1120,7 +1121,17 @@
       longitudeInput.value = settings.longitude ?? '';
       radiusInput.value = settings.radius_meters ?? '';
       timeoutInput.value = settings.timeout_seconds ?? '';
+      updateEnabledState();
       updateSettingsMap();
+    }
+
+    function updateEnabledState() {
+      if (!enabledState) {
+        return;
+      }
+
+      enabledState.textContent = enabledInput.checked ? '사용' : '미사용';
+      enabledState.className = `badge location-enabled-state ${enabledInput.checked ? 'text-bg-success' : 'text-bg-secondary'}`;
     }
 
     function readForm() {
@@ -1232,6 +1243,7 @@
     [latitudeInput, longitudeInput, radiusInput].forEach((input) => {
       input.addEventListener('input', updateSettingsMap);
     });
+    enabledInput.addEventListener('change', updateEnabledState);
 
     form.addEventListener('submit', async (event) => {
       event.preventDefault();
@@ -1292,6 +1304,7 @@
     });
 
     initSettingsMap();
+    updateEnabledState();
     loadLocationSettings();
   }
 
@@ -1409,7 +1422,6 @@
     const updateProgressFill = document.getElementById('updateProgressFill');
     const updateProgressSteps = document.getElementById('updateProgressSteps');
     const serverInfoList = document.getElementById('serverInfoList');
-    const refreshServerInfoButton = document.getElementById('refreshServerInfoButton');
     const progressStages = ['다운로드 중', '백업 중', '설치 중', '적용 중', '마무리 하는 중'];
     let releasesCache = [];
     let progressTimer = null;
@@ -1471,7 +1483,6 @@
     });
 
     updateCheckButton.addEventListener('click', () => loadUpdateInfo(true));
-    refreshServerInfoButton.addEventListener('click', () => loadServerInfo(true, true));
     closeReleaseDetailButton.addEventListener('click', closeReleaseDetail);
     releaseDetailModal.addEventListener('click', (event) => {
       if (event.target === releaseDetailModal) {
@@ -1523,8 +1534,6 @@
         const installedVersion = data.result?.installed_version || tag;
         currentVersionText.textContent = installedVersion;
         toast(`${installedVersion} 버전으로 업데이트되었습니다. 백업: ${data.result?.backup_path || '-'}`);
-        loadUpdateInfo(false);
-        loadServerInfo(false);
       } catch (error) {
         closeUpdateProgress();
         showAlert('업데이트 중 오류가 발생했습니다.');
@@ -1534,18 +1543,13 @@
       }
     });
 
-    async function loadServerInfo(showSuccess = false, showLoading = false) {
-      if (showLoading) {
-        refreshServerInfoButton.disabled = true;
-        refreshServerInfoButton.textContent = '불러오는 중...';
-      }
-
+    async function loadServerInfo() {
       try {
         const data = await api('/api/admin-system.php', { type: 'server_info' });
         if (!data) return;
 
         if (data.status !== 1) {
-          if (showLoading || !serverInfoList.querySelector('[data-server-info-value]')) {
+          if (!serverInfoList.querySelector('[data-server-info-value]')) {
             serverInfoList.innerHTML = '<p class="text-secondary mb-0">서버 정보를 불러오지 못했습니다.</p>';
           }
           return;
@@ -1555,19 +1559,11 @@
         syncServerInfoLive(data.result || {});
         scheduleServerInfoSync(data.result || {});
 
-        if (showSuccess) {
-          toast('서버 정보를 새로고침했습니다.');
-        }
       } catch (error) {
         scheduleServerInfoSync(null);
 
-        if (showLoading || !serverInfoList.querySelector('[data-server-info-value]')) {
+        if (!serverInfoList.querySelector('[data-server-info-value]')) {
           serverInfoList.innerHTML = '<p class="text-secondary mb-0">서버 정보를 불러오지 못했습니다.</p>';
-        }
-      } finally {
-        if (showLoading) {
-          refreshServerInfoButton.disabled = false;
-          refreshServerInfoButton.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i> 새로고침';
         }
       }
     }
@@ -1772,7 +1768,7 @@
         clearInterval(serverInfoSyncTimer);
       }
 
-      serverInfoSyncTimer = setInterval(() => loadServerInfo(false, false), serverInfoSyncIntervalMs);
+      serverInfoSyncTimer = setInterval(() => loadServerInfo(), serverInfoSyncIntervalMs);
     }
 
     function openUpdateProgress() {
@@ -1812,7 +1808,8 @@
       }, delay);
     }
 
-    loadServerInfo(false, true);
+    loadUpdateInfo(false);
+    loadServerInfo();
   }
 
   function initPassword() {

@@ -480,6 +480,18 @@ body {
   font-weight: 700;
 }
 
+.attendance-row-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.attendance-row-actions .btn {
+  min-width: 46px;
+}
+
 .admin-sidebar-footer {
   display: grid;
   gap: 16px;
@@ -658,14 +670,45 @@ body {
   max-width: 960px;
 }
 
+.location-enabled-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.location-enabled-state {
+  min-width: 48px;
+}
+
 .edit-form-card .form-control,
 .edit-form-card .form-select,
 .edit-form-card .input-group-text {
-  min-height: 46px;
+  height: 48px;
+  min-height: 48px;
+  padding: 0.65rem 0.85rem;
+  border-color: #d7e2dc;
+  border-radius: 8px;
+  font-size: 1rem;
+  line-height: 1.4;
+}
+
+.edit-form-card .input-group .form-control {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.edit-form-card .input-group .input-group-text {
+  min-width: 40px;
+  justify-content: center;
+  padding-inline: 0.75rem;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
 }
 
 .edit-form-card textarea.form-control {
+  height: auto;
   min-height: 112px;
+  resize: vertical;
 }
 
 .system-grid {

@@ -82,7 +82,7 @@
           <th style="width: 150px;">
             <button class="table-sort-button" type="button" data-sort-key="location_status">위치 인증 <span data-sort-icon="location_status"></span></button>
           </th>
-          <th class="text-end" style="width: 240px;">관리</th>
+          <th class="text-end" style="width: 280px;">관리</th>
         </tr>
       </thead>
       <tbody id="attendanceTableBody">

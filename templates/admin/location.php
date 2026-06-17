@@ -12,7 +12,10 @@
   <form id="locationForm">
     <div class="form-check form-switch mb-4">
       <input class="form-check-input" id="locationEnabledInput" type="checkbox" role="switch">
-      <label class="form-check-label fw-semibold" for="locationEnabledInput">위치 기반 출석 사용</label>
+      <label class="form-check-label fw-semibold location-enabled-label" for="locationEnabledInput">
+        <span>위치 기반 출석</span>
+        <span class="badge text-bg-secondary location-enabled-state" id="locationEnabledState">미사용</span>
+      </label>
     </div>
 
     <div class="row g-3">

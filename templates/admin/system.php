@@ -114,12 +114,6 @@
         <strong>서버 정보를 불러오는 중입니다.</strong>
       </div>
     </div>
-
-    <div class="system-actions">
-      <button class="btn btn-outline-secondary" id="refreshServerInfoButton" type="button">
-        <i class="bi bi-arrow-clockwise me-1"></i> 새로고침
-      </button>
-    </div>
   </section>
 </div>
 
