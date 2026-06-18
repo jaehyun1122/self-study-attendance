@@ -8,7 +8,7 @@
 
 <div id="adminAlert"></div>
 
-<section class="admin-card form-card edit-form-card">
+<section class="admin-card form-card edit-form-card" id="editFormCard">
   <?php
     $studentNoRange = $app->lengthRange('student_no_length', 5, 5);
     $studentNoPattern = $studentNoRange['min'] === $studentNoRange['max']
@@ -50,7 +50,13 @@
       <legend class="edit-section-title"><i class="bi bi-geo-alt"></i> 위치 인증</legend>
       <div class="row g-3">
         <div class="col-md-6">
-          <label class="form-label" for="locationStatusEditInput">위치 인증 상태</label>
+          <div class="edit-status-label-row">
+            <label class="form-label mb-0" for="locationStatusEditInput">위치 인증 상태</label>
+            <div class="form-check form-switch edit-status-mode-switch">
+              <input class="form-check-input" id="locationStatusManualSwitch" type="checkbox" role="switch">
+              <label class="form-check-label" for="locationStatusManualSwitch">수동</label>
+            </div>
+          </div>
           <select class="form-select form-select-lg" id="locationStatusEditInput" disabled>
             <option value="unchecked">위치 인증 미사용</option>
             <option value="verified">위치 인증 완료</option>
@@ -58,7 +64,7 @@
             <option value="approved">관리자 승인 완료</option>
             <option value="rejected">위치 인증 반려</option>
           </select>
-          <div class="form-text">좌표와 위치 설정을 기준으로 자동 계산됩니다.</div>
+          <div class="form-text" id="locationStatusModeText">자동 모드에서는 좌표와 위치 설정을 기준으로 계산됩니다.</div>
         </div>
 
         <div class="col-md-6">
@@ -110,7 +116,7 @@
             <option value="unchecked">위치 인증 미사용</option>
             <option value="custom">기타</option>
           </select>
-          <textarea class="form-control" id="locationMessageInput" rows="3" readonly></textarea>
+          <textarea class="form-control" id="locationMessageInput" rows="3" placeholder="내용을 입력해주세요" readonly></textarea>
         </div>
       </div>
 
@@ -136,4 +142,13 @@
       <a class="btn btn-outline-secondary" href="/admin/list.php">취소</a>
     </div>
   </form>
+</section>
+
+<section class="admin-card form-card edit-empty-state" id="editEmptyState" hidden>
+  <div class="empty-table-state">
+    <i class="bi bi-exclamation-circle" aria-hidden="true"></i>
+    <strong id="editEmptyTitle">출석 기록을 찾을 수 없습니다.</strong>
+    <p class="text-secondary mb-0" id="editEmptyDescription">목록에서 다시 수정할 기록을 선택해주세요.</p>
+    <a class="btn btn-outline-success mt-2" href="/admin/list.php">출석 목록으로 돌아가기</a>
+  </div>
 </section>

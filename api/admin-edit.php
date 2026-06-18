@@ -303,7 +303,24 @@ try {
     }
 
     $computed = $computedLocationState($locationLatitude, $locationLongitude);
-    $locationStatus = $computed['status'];
+    $locationStatusMode = trim((string) ($input['location_status_mode'] ?? 'auto'));
+    $allowedLocationStatusModes = ['auto', 'manual'];
+    $allowedLocationStatuses = ['unchecked', 'verified', 'pending', 'approved', 'rejected'];
+
+    if (!in_array($locationStatusMode, $allowedLocationStatusModes, true)) {
+        $app->error('지원하지 않는 위치 인증 상태 수정 방식입니다.', 400);
+    }
+
+    if ($locationStatusMode === 'manual') {
+        $locationStatus = trim((string) ($input['location_status'] ?? ''));
+
+        if (!in_array($locationStatus, $allowedLocationStatuses, true)) {
+            $app->error('지원하지 않는 위치 인증 상태입니다.', 400);
+        }
+    } else {
+        $locationStatus = $computed['status'];
+    }
+
     $locationDistanceMeters = $computed['distance'];
     $messageTemplate = (string) ($input['location_message_template'] ?? 'auto');
     $allowedMessageTemplates = array_merge(['auto', 'custom'], array_keys($locationMessageTemplates));

@@ -1,6 +1,7 @@
 (function () {
   const TOKEN_KEY = 'admin_token';
-  const FILTER_HISTORY_LIMIT = 24;
+  const FILTER_HISTORY_KEY = 'attendance_filter_history_v1';
+  const FILTER_HISTORY_LIMIT = 30;
   const DEFAULT_SYNC_INTERVAL_MS = 5000;
   const DEFAULT_MAP_CENTER = [37.5665, 126.9780];
   const token = window.ADMIN_TOKEN || localStorage.getItem(TOKEN_KEY);
@@ -573,11 +574,32 @@
     }
 
     function loadFilterHistory() {
-      filterHistory = [];
+      try {
+        const saved = JSON.parse(localStorage.getItem(FILTER_HISTORY_KEY) || '[]');
+        filterHistory = Array.isArray(saved)
+          ? saved
+            .filter((item) => item && typeof item === 'object')
+            .map((item) => normalizedFilters(item))
+            .slice(-FILTER_HISTORY_LIMIT)
+          : [];
+
+        localStorage.setItem(FILTER_HISTORY_KEY, JSON.stringify(filterHistory));
+      } catch (error) {
+        filterHistory = [];
+      }
     }
 
     function saveFilterHistory() {
-      filterHistory = filterHistory.slice(-FILTER_HISTORY_LIMIT);
+      filterHistory = filterHistory
+        .map((item) => normalizedFilters(item))
+        .slice(-FILTER_HISTORY_LIMIT);
+
+      try {
+        localStorage.setItem(FILTER_HISTORY_KEY, JSON.stringify(filterHistory));
+      } catch (error) {
+        // Browsers can block storage in private or restricted contexts.
+      }
+
       updateFilterHistoryButtons();
     }
 
@@ -1198,12 +1220,18 @@
   function initEdit() {
     const params = new URLSearchParams(window.location.search);
     const id = Number(params.get('id') || 0);
+    const formCard = document.getElementById('editFormCard');
+    const emptyState = document.getElementById('editEmptyState');
+    const emptyTitle = document.getElementById('editEmptyTitle');
+    const emptyDescription = document.getElementById('editEmptyDescription');
     const form = document.getElementById('editForm');
     const saveButton = document.getElementById('saveEditButton');
     const clearLocationButton = document.getElementById('clearEditLocationButton');
     const useCurrentLocationButton = document.getElementById('useCurrentEditLocationButton');
     const mapElement = document.getElementById('editLocationMap');
     const field = (fieldId) => document.getElementById(fieldId);
+    const statusManualSwitch = field('locationStatusManualSwitch');
+    const statusModeText = field('locationStatusModeText');
     const statusInput = field('locationStatusEditInput');
     const latitudeInput = field('locationLatitudeInput');
     const longitudeInput = field('locationLongitudeInput');
@@ -1226,9 +1254,40 @@
     let radiusCircle = null;
     let locationSettings = {};
 
+    function showEditForm() {
+      if (formCard) {
+        formCard.hidden = false;
+      }
+
+      if (emptyState) {
+        emptyState.hidden = true;
+      }
+    }
+
+    function showEditEmptyState(title, description) {
+      showAlert(title);
+
+      if (formCard) {
+        formCard.hidden = true;
+      } else {
+        form.hidden = true;
+      }
+
+      if (emptyTitle) {
+        emptyTitle.textContent = title;
+      }
+
+      if (emptyDescription) {
+        emptyDescription.textContent = description;
+      }
+
+      if (emptyState) {
+        emptyState.hidden = false;
+      }
+    }
+
     if (!id) {
-      showAlert('올바른 출석 기록을 선택해주세요.');
-      form.hidden = true;
+      showEditEmptyState('올바른 출석 기록을 선택해주세요.', '목록에서 수정할 출석 기록을 다시 선택해주세요.');
       return;
     }
 
@@ -1413,24 +1472,48 @@
       };
     }
 
+    function isManualLocationStatus() {
+      return Boolean(statusManualSwitch?.checked);
+    }
+
+    function updateLocationStatusModeState() {
+      const manual = isManualLocationStatus();
+      statusInput.disabled = !manual;
+
+      if (statusModeText) {
+        statusModeText.textContent = manual
+          ? '수동 모드에서는 위치 인증 상태를 직접 선택할 수 있습니다.'
+          : '자동 모드에서는 좌표와 위치 설정을 기준으로 계산됩니다.';
+      }
+    }
+
     function updateComputedLocationFields() {
       const state = computedLocationState();
-      statusInput.value = state.status;
+
+      if (!isManualLocationStatus()) {
+        statusInput.value = state.status;
+      }
+
       distanceInput.value = state.distance === null ? '' : state.distance.toFixed(1);
 
       if (messageTemplateInput.value === 'auto') {
         messageInput.value = state.message;
       }
 
+      updateLocationStatusModeState();
       updateMessageEditState();
     }
 
-    function updateMessageEditState() {
+    function updateMessageEditState(options = {}) {
       const template = messageTemplateInput.value;
       const custom = template === 'custom';
       messageInput.readOnly = !custom;
+      messageInput.placeholder = custom ? '내용을 입력해주세요' : '';
 
       if (custom) {
+        if (options.clearCustom) {
+          messageInput.value = '';
+        }
         return;
       }
 
@@ -1449,6 +1532,10 @@
     }
 
     function fillEditForm(record) {
+      showEditForm();
+      if (statusManualSwitch) {
+        statusManualSwitch.checked = false;
+      }
       field('editIdInput').value = record.id;
       field('studentNoInput').value = record.student_no;
       field('nameInput').value = record.name;
@@ -1476,6 +1563,8 @@
         location_latitude: nullableNumber(field('locationLatitudeInput').value),
         location_longitude: nullableNumber(field('locationLongitudeInput').value),
         location_accuracy: nullableNumber(field('locationAccuracyInput').value),
+        location_status_mode: isManualLocationStatus() ? 'manual' : 'auto',
+        location_status: field('locationStatusEditInput').value,
         location_message_template: field('locationMessageTemplateInput').value,
         location_message: field('locationMessageInput').value.trim(),
         location_checked_at: fromDateTimeLocal(field('locationCheckedAtInput').value) || null,
@@ -1499,15 +1588,19 @@
         if (!data) return;
 
         if (data.status !== 1) {
-          showAlert(data.msg || '출석 기록을 불러오지 못했습니다.');
-          form.hidden = true;
+          showEditEmptyState(
+            data.msg || '출석 기록을 불러오지 못했습니다.',
+            '이미 삭제되었거나 존재하지 않는 기록일 수 있습니다. 목록에서 다시 선택해주세요.'
+          );
           return;
         }
 
         fillEditForm(data.result);
       } catch (error) {
-        showAlert('출석 기록을 불러오는 중 오류가 발생했습니다.');
-        form.hidden = true;
+        showEditEmptyState(
+          '출석 기록을 불러오는 중 오류가 발생했습니다.',
+          '네트워크 상태를 확인한 뒤 목록에서 다시 시도해주세요.'
+        );
       }
     }
 
@@ -1518,7 +1611,19 @@
       });
     });
 
-    messageTemplateInput.addEventListener('change', updateMessageEditState);
+    if (statusManualSwitch) {
+      statusManualSwitch.addEventListener('change', () => {
+        if (!isManualLocationStatus()) {
+          statusInput.value = computedLocationState().status;
+        }
+
+        updateLocationStatusModeState();
+      });
+    }
+
+    messageTemplateInput.addEventListener('change', () => {
+      updateMessageEditState({ clearCustom: messageTemplateInput.value === 'custom' });
+    });
 
     clearLocationButton.addEventListener('click', () => {
       latitudeInput.value = '';
@@ -1596,6 +1701,7 @@
       }
     });
 
+    updateLocationStatusModeState();
     loadEditRecord();
   }
 
