@@ -218,6 +218,20 @@ final class Controller
     }
 
     /**
+     * @return array{enabled: bool, configured: bool, timeout_seconds: ?int}
+     */
+    public function publicLocationStatus(): array
+    {
+        $settings = $this->locationSettings();
+
+        return [
+            'enabled' => $settings['enabled'],
+            'configured' => $settings['configured'],
+            'timeout_seconds' => $settings['timeout_seconds'],
+        ];
+    }
+
+    /**
      * @return array{enabled: bool, latitude: ?float, longitude: ?float, radius_meters: ?int, timeout_seconds: ?int}
      */
     public function normalizedLocationSettingPayload(array $settings): array

@@ -84,26 +84,6 @@ try {
         return date('Y-m-d H:i:s', $timestamp);
     };
 
-    $nullableDateTime = static function (array $input, string $key, mixed $default) use ($normalizeDateTime): ?string {
-        if (!array_key_exists($key, $input)) {
-            return $default === null ? null : (string) $default;
-        }
-
-        $value = trim((string) $input[$key]);
-
-        return $value === '' ? null : $normalizeDateTime($value, '위치 시각');
-    };
-
-    $nullableFloat = static function (array $input, string $key, mixed $default): ?float {
-        if (!array_key_exists($key, $input)) {
-            return is_numeric($default) ? (float) $default : null;
-        }
-
-        $value = trim((string) $input[$key]);
-
-        return $value === '' || !is_numeric($value) ? null : (float) $value;
-    };
-
     $verifyAdminPassword = static function (mixed $password) use ($app): void {
         $app->verifyAdminPassword($password, 403);
     };
@@ -223,49 +203,13 @@ try {
         $app->error('지원하지 않는 위치 인증 상태입니다.', 400);
     }
 
-    $locationLatitude = $nullableFloat($input, 'location_latitude', $existing['location_latitude'] ?? null);
-    $locationLongitude = $nullableFloat($input, 'location_longitude', $existing['location_longitude'] ?? null);
-    $locationAccuracy = $nullableFloat($input, 'location_accuracy', $existing['location_accuracy'] ?? null);
-    $locationDistanceMeters = $nullableFloat($input, 'location_distance_meters', $existing['location_distance_meters'] ?? null);
-
-    if ($locationLatitude !== null && ($locationLatitude < -90 || $locationLatitude > 90)) {
-        $app->error('위도는 -90에서 90 사이여야 합니다.', 400);
-    }
-
-    if ($locationLongitude !== null && ($locationLongitude < -180 || $locationLongitude > 180)) {
-        $app->error('경도는 -180에서 180 사이여야 합니다.', 400);
-    }
-
-    if ($locationAccuracy !== null && $locationAccuracy < 0) {
-        $app->error('위치 정확도는 0 이상이어야 합니다.', 400);
-    }
-
-    if ($locationDistanceMeters !== null && $locationDistanceMeters < 0) {
-        $app->error('거리 정보는 0 이상이어야 합니다.', 400);
-    }
-
-    $locationMessage = array_key_exists('location_message', $input)
-        ? trim((string) $input['location_message'])
-        : ($existing['location_message'] ?? null);
-    $locationMessage = $locationMessage === '' ? null : $locationMessage;
-
-    $locationCheckedAt = $nullableDateTime($input, 'location_checked_at', $existing['location_checked_at'] ?? null);
-    $locationApprovedAt = $nullableDateTime($input, 'location_approved_at', $existing['location_approved_at'] ?? null);
-
     $statement = $app->pdo()->prepare(
         'UPDATE attendance
         SET student_no = :student_no,
             name = :name,
             attend_date = :attend_date,
             created_at = :created_at,
-            location_status = :location_status,
-            location_latitude = :location_latitude,
-            location_longitude = :location_longitude,
-            location_accuracy = :location_accuracy,
-            location_distance_meters = :location_distance_meters,
-            location_message = :location_message,
-            location_checked_at = :location_checked_at,
-            location_approved_at = :location_approved_at
+            location_status = :location_status
         WHERE id = :id'
     );
 
@@ -276,13 +220,6 @@ try {
             ':attend_date' => $attendDate,
             ':created_at' => $createdAt,
             ':location_status' => $locationStatus,
-            ':location_latitude' => $locationLatitude,
-            ':location_longitude' => $locationLongitude,
-            ':location_accuracy' => $locationAccuracy,
-            ':location_distance_meters' => $locationDistanceMeters,
-            ':location_message' => $locationMessage,
-            ':location_checked_at' => $locationCheckedAt,
-            ':location_approved_at' => $locationApprovedAt,
             ':id' => $id,
         ]);
     } catch (PDOException $exception) {

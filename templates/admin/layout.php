@@ -33,7 +33,7 @@
           <?php endforeach; ?>
         </ul>
         <div class="admin-developer-meta d-lg-none">
-          <span>개발자: <a href="<?php echo $h($app->string('repository_url')); ?>" target="_blank" rel="noopener noreferrer"><?php echo $h($app->string('powered_by')); ?></a></span>
+          <span>개발자: <a href="<?php echo $h($app->string('powered_by_url', $app->string('repository_url'))); ?>" target="_blank" rel="noopener noreferrer"><?php echo $h($app->string('developer_name', $app->string('powered_by'))); ?></a></span>
           <span>현재 버전 <?php echo $h($app->string('app_version')); ?></span>
         </div>
         <button class="btn btn-outline-secondary btn-sm js-logout-button" type="button">로그아웃</button>
@@ -63,7 +63,7 @@
       </div>
       <div class="admin-sidebar-footer">
         <div class="admin-developer-meta">
-          <span>개발자: <a href="<?php echo $h($app->string('repository_url')); ?>" target="_blank" rel="noopener noreferrer"><?php echo $h($app->string('powered_by')); ?></a></span>
+          <span>개발자: <a href="<?php echo $h($app->string('powered_by_url', $app->string('repository_url'))); ?>" target="_blank" rel="noopener noreferrer"><?php echo $h($app->string('developer_name', $app->string('powered_by'))); ?></a></span>
           <span>현재 버전 <?php echo $h($app->string('app_version')); ?></span>
         </div>
         <button class="btn btn-outline-secondary w-100 js-logout-button" type="button">

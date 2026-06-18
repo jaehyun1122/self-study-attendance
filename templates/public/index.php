@@ -67,6 +67,12 @@
           <span>학생 정보</span>
           <strong id="studentText"></strong>
         </div>
+        <?php if ($app->publicLocationStatus()['enabled']): ?>
+          <p class="attendance-location-notice">
+            <i class="bi bi-geo-alt"></i>
+            <span>교내 출석 여부를 확인하기 위해 위치 권한이 필요합니다.</span>
+          </p>
+        <?php endif; ?>
         <button class="btn btn-success btn-lg w-100 attendance-submit" id="attendButton" type="button">
           <i class="bi bi-check2-circle me-1"></i> 출석하기
         </button>
@@ -115,7 +121,7 @@
       <div class="student-edit-actions location-confirm-actions">
         <button class="btn btn-outline-secondary" id="cancelLocationConfirmButton" type="button">취소</button>
         <button class="btn btn-outline-success" id="requestLocationAgainButton" type="button" hidden>다시 위치 요청</button>
-        <button class="btn btn-success" id="confirmLocationOverrideButton" type="button" hidden>관리자 승인 요청</button>
+        <button class="btn btn-success" id="confirmLocationOverrideButton" type="button" hidden>일단 출석하기</button>
       </div>
     </section>
   </div>

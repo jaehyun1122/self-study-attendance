@@ -62,8 +62,6 @@ try {
                     } else {
                         $app->error('교내 출석 가능 범위를 벗어났습니다.', 200, [
                             'requires_location_confirmation' => true,
-                            'distance_meters' => round($locationDistanceMeters, 1),
-                            'radius_meters' => $radiusMeters,
                         ]);
                     }
                 } else {
@@ -141,7 +139,6 @@ try {
             'attend_date' => $attendDate,
             'attend_datetime' => $createdAt,
             'location_status' => $duplicateRecord['location_status'] ?? 'unchecked',
-            'location_approved_at' => $duplicateRecord['location_approved_at'] ?? null,
         ]);
     }
 
@@ -156,8 +153,6 @@ try {
         'attend_datetime' => $app->formatDateTime($attendDateTime),
         'attend_time' => $app->formatDateTime($attendDateTime),
         'location_status' => $locationStatus,
-        'location_message' => $locationMessage,
-        'location_distance_meters' => $locationDistanceMeters === null ? null : round($locationDistanceMeters, 1),
     ]);
 } catch (Throwable $exception) {
     $app->error('출석 처리 중 오류가 발생했습니다.', 500, ['detail' => $exception->getMessage()]);

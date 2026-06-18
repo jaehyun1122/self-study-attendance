@@ -349,12 +349,10 @@
           break;
         }
 
-        const distance = Number(data.result?.distance_meters || 0).toFixed(1);
-        const radius = Number(data.result?.radius_meters || 0).toFixed(0);
         const action = await locationManager.openLocationDialog({
-          title: '교내 범위 밖',
-          message: `현재 위치가 출석 가능 반경을 벗어났습니다. 거리 ${distance}m / 허용 반경 ${radius}m`,
-          help: '위치가 부정확할 수 있으면 다시 위치 요청을 눌러주세요. 실제로 교내에 있다면 관리자 승인 요청으로 출석을 기록할 수 있습니다.',
+          title: '교내 출석 확인 필요',
+          message: '현재 위치로는 교내 출석 여부를 확인할 수 없습니다.',
+          help: '위치가 부정확할 수 있으면 다시 위치 요청을 눌러주세요. 실제로 교내에 있다면 일단 출석하기로 출석을 기록할 수 있습니다.',
           retry: true,
           override: true,
         });

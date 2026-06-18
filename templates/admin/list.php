@@ -45,9 +45,6 @@
         <button class="btn btn-outline-secondary px-4" id="bulkDeleteButton" type="button" disabled>
           <i class="bi bi-trash3 me-1"></i> 선택 삭제
         </button>
-        <button class="btn btn-outline-success px-4" id="exportListButton" type="button">
-          <i class="bi bi-download me-1"></i> 엑셀로 내보내기
-        </button>
       </div>
     </div>
   </form>
@@ -60,7 +57,12 @@
     <div>
       <strong id="listTitle">출석 기록</strong>
     </div>
-    <span class="badge rounded-pill text-bg-success" id="attendanceCount">0건</span>
+    <div class="list-card-actions">
+      <span class="badge rounded-pill text-bg-success" id="attendanceCount">0건</span>
+      <button class="btn btn-sm btn-outline-success" id="exportListButton" type="button">
+        <i class="bi bi-download me-1"></i> 엑셀로 내보내기
+      </button>
+    </div>
   </div>
   <div class="table-responsive">
     <table class="table admin-table align-middle mb-0">

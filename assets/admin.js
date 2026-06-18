@@ -96,7 +96,24 @@
         cancelButton.onclick = null;
         confirmButton.onclick = null;
         modal.onclick = null;
+        document.removeEventListener('keydown', handleKeydown);
         resolve(result);
+      };
+
+      const handleKeydown = (event) => {
+        if (modal.hidden) {
+          return;
+        }
+
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          close(false);
+        }
+
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          close(true);
+        }
       };
 
       closeButton.onclick = () => close(false);
@@ -108,6 +125,7 @@
         }
       };
 
+      document.addEventListener('keydown', handleKeydown);
       confirmButton.focus();
     });
   }
@@ -1065,15 +1083,13 @@
       }
 
       const csvRows = [
-        ['순서', '학번', '이름', '출석일시', '위치 인증', '거리', '위치 메시지'],
+        ['순서', '학번', '이름', '출석일시', '위치인증'],
         ...rows.map((row, index) => [
           index + 1,
           row.student_no,
           row.name,
           formatDateTimeText(row.attend_datetime || row.created_at || row.attend_date),
           locationStatusText(row.location_status),
-          row.location_distance_meters ?? '',
-          row.location_message ?? '',
         ]),
       ];
       const csv = `\ufeff${csvRows.map((row) => row.map(csvEscape).join(',')).join('\r\n')}`;
@@ -1342,13 +1358,6 @@
         field('nameInput').value = record.name;
         field('createdAtInput').value = toDateTimeLocal(record.attend_datetime || record.created_at);
         field('locationStatusEditInput').value = record.location_status || 'unchecked';
-        field('locationLatitudeInput').value = record.location_latitude ?? '';
-        field('locationLongitudeInput').value = record.location_longitude ?? '';
-        field('locationAccuracyInput').value = record.location_accuracy ?? '';
-        field('locationDistanceInput').value = record.location_distance_meters ?? '';
-        field('locationMessageInput').value = record.location_message ?? '';
-        field('locationCheckedAtInput').value = toDateTimeLocal(record.location_checked_at);
-        field('locationApprovedAtInput').value = toDateTimeLocal(record.location_approved_at);
       })
       .catch(() => {
         showAlert('출석 기록을 불러오는 중 오류가 발생했습니다.');
@@ -1377,13 +1386,6 @@
           name,
           created_at: fromDateTimeLocal(field('createdAtInput').value),
           location_status: field('locationStatusEditInput').value,
-          location_latitude: nullableNumber(field('locationLatitudeInput').value),
-          location_longitude: nullableNumber(field('locationLongitudeInput').value),
-          location_accuracy: nullableNumber(field('locationAccuracyInput').value),
-          location_distance_meters: nullableNumber(field('locationDistanceInput').value),
-          location_message: field('locationMessageInput').value.trim(),
-          location_checked_at: fromDateTimeLocal(field('locationCheckedAtInput').value),
-          location_approved_at: fromDateTimeLocal(field('locationApprovedAtInput').value),
         });
 
         if (!data) return;
@@ -1413,6 +1415,9 @@
     const updateInstallForm = document.getElementById('updateInstallForm');
     const updatePasswordInput = document.getElementById('updatePasswordInput');
     const updateInstallButton = document.getElementById('updateInstallButton');
+    const repairInstallForm = document.getElementById('repairInstallForm');
+    const repairPasswordInput = document.getElementById('repairPasswordInput');
+    const repairInstallButton = document.getElementById('repairInstallButton');
     const releaseSelect = document.getElementById('releaseSelect');
     const releaseList = document.getElementById('releaseList');
     const currentVersionText = document.getElementById('currentVersionText');
@@ -1423,11 +1428,14 @@
     const releaseDetailMeta = document.getElementById('releaseDetailMeta');
     const releaseDetailBody = document.getElementById('releaseDetailBody');
     const updateProgressModal = document.getElementById('updateProgressModal');
+    const updateProgressTitle = document.getElementById('updateProgressTitle');
     const updateProgressFill = document.getElementById('updateProgressFill');
     const updateProgressSteps = document.getElementById('updateProgressSteps');
     const serverInfoList = document.getElementById('serverInfoList');
     const progressStages = ['다운로드 중', '백업 중', '설치 중', '적용 중', '마무리 하는 중'];
+    const RELEASE_PREVIEW_LIMIT = 3;
     let releasesCache = [];
+    let releaseListExpanded = false;
     let progressTimer = null;
     let progressIndex = 0;
     let serverInfoServerTime = null;
@@ -1447,7 +1455,7 @@
       const isAll = scope === 'all';
       const confirmed = await confirmAction(
         isAll
-          ? '출석 기록과 저장된 설정을 초기화할까요? 관리자 비밀번호는 유지됩니다.'
+          ? '출석 기록, 앱 설정, 관리자 계정과 로그인 세션을 모두 삭제하고 초기 설치 상태로 되돌릴까요?'
           : '모든 출석 기록을 초기화할까요?',
         {
           title: '초기화 확인',
@@ -1457,6 +1465,14 @@
       );
 
       if (!confirmed) {
+        return;
+      }
+
+      if (isAll && !await confirmAction('정말 모든 데이터를 초기화할까요? 이 작업 후에는 설치 마법사를 다시 진행해야 합니다.', {
+        title: '최종 확인',
+        confirmText: '모두 초기화',
+        confirmClass: 'btn-danger',
+      })) {
         return;
       }
 
@@ -1478,6 +1494,10 @@
 
         resetPasswordInput.value = '';
         toast(data.msg || '초기화되었습니다.');
+        if (isAll) {
+          localStorage.removeItem(TOKEN_KEY);
+          window.location.href = '/install.php';
+        }
       } catch (error) {
         showAlert('초기화 중 오류가 발생했습니다.');
       } finally {
@@ -1517,7 +1537,7 @@
 
       updateInstallButton.disabled = true;
       updateInstallButton.textContent = '업데이트 중...';
-      openUpdateProgress();
+      openUpdateProgress('업데이트 중');
 
       try {
         const data = await api('/api/admin-system.php', {
@@ -1551,7 +1571,61 @@
         showAlert('업데이트 중 오류가 발생했습니다.');
       } finally {
         updateInstallButton.disabled = false;
-        updateInstallButton.innerHTML = '<i class="bi bi-download me-1"></i> 다운로드 후 업그레이드';
+        updateInstallButton.innerHTML = '<i class="bi bi-download me-1"></i> 업데이트';
+      }
+    });
+
+    repairInstallForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+
+      const currentVersion = currentVersionText.textContent.trim();
+      const confirmed = await confirmAction(`${currentVersion} 파일을 다시 설치해 복구할까요? 데이터베이스와 설정 파일은 보존됩니다.`, {
+        title: '재설치(복구) 확인',
+        confirmText: '재설치',
+        confirmClass: 'btn-success',
+        type: 'info',
+      });
+
+      if (!confirmed) {
+        return;
+      }
+
+      repairInstallButton.disabled = true;
+      repairInstallButton.textContent = '재설치 중...';
+      openUpdateProgress('재설치(복구) 중');
+
+      try {
+        const data = await api('/api/admin-system.php', {
+          type: 'repair_install',
+          password: repairPasswordInput.value,
+        });
+        if (!data) return;
+
+        if (data.status !== 1) {
+          closeUpdateProgress();
+          showAlert(data.msg || '재설치(복구)에 실패했습니다.');
+          return;
+        }
+
+        finishUpdateProgress();
+        repairPasswordInput.value = '';
+        const installedVersion = data.result?.installed_version || currentVersion || '-';
+        const backupPath = data.result?.backup_path || '-';
+        currentVersionText.textContent = installedVersion;
+        await wait(500);
+        await openAdminDialog({
+          title: '재설치(복구) 완료',
+          message: `${installedVersion} 재설치 완료\n백업경로: ${backupPath}`,
+          confirmText: '확인',
+          confirmClass: 'btn-success',
+          type: 'info',
+        });
+      } catch (error) {
+        closeUpdateProgress();
+        showAlert('재설치(복구) 중 오류가 발생했습니다.');
+      } finally {
+        repairInstallButton.disabled = false;
+        repairInstallButton.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i> 재설치(복구)';
       }
     });
 
@@ -1594,6 +1668,7 @@
           return;
         }
 
+        releaseListExpanded = false;
         renderUpdateInfo(data.result || {});
 
         if (showSuccess) {
@@ -1634,15 +1709,31 @@
         releaseSelect.value = latest.tag_name;
       }
 
-      releaseList.innerHTML = releasesCache.length
-        ? releasesCache.map((release, index) => `
+      renderReleaseList();
+    }
+
+    function renderReleaseList() {
+      if (!releasesCache.length) {
+        releaseList.innerHTML = '<p class="text-secondary mb-0">표시할 릴리즈가 없습니다.</p>';
+        return;
+      }
+
+      const visibleReleases = releaseListExpanded ? releasesCache : releasesCache.slice(0, RELEASE_PREVIEW_LIMIT);
+      const hiddenCount = Math.max(0, releasesCache.length - RELEASE_PREVIEW_LIMIT);
+      releaseList.innerHTML = `
+        ${visibleReleases.map((release, index) => `
           <button class="release-item release-item-button" type="button" data-release-index="${index}">
             <strong>${escapeHtml(release.tag_name)}</strong>
             <span>${escapeHtml(release.name || release.tag_name)}</span>
             <small>${escapeHtml(release.published_at_text || formatReleaseDate(release.published_at) || '태그')}</small>
           </button>
-        `).join('')
-        : '<p class="text-secondary mb-0">표시할 릴리즈가 없습니다.</p>';
+        `).join('')}
+        ${hiddenCount > 0 ? `
+          <button class="release-more-button" type="button" id="releaseMoreButton">
+            ${releaseListExpanded ? '접기' : `더보기 +${hiddenCount}`}
+          </button>
+        ` : ''}
+      `;
 
       releaseList.querySelectorAll('[data-release-index]').forEach((button) => {
         button.addEventListener('click', () => {
@@ -1652,6 +1743,14 @@
           }
         });
       });
+
+      const releaseMoreButton = document.getElementById('releaseMoreButton');
+      if (releaseMoreButton) {
+        releaseMoreButton.addEventListener('click', () => {
+          releaseListExpanded = !releaseListExpanded;
+          renderReleaseList();
+        });
+      }
     }
 
     function formatReleaseDate(value) {
@@ -1783,8 +1882,11 @@
       serverInfoSyncTimer = setInterval(() => loadServerInfo(), serverInfoSyncIntervalMs);
     }
 
-    function openUpdateProgress() {
+    function openUpdateProgress(title = '업데이트 중') {
       progressIndex = 0;
+      if (updateProgressTitle) {
+        updateProgressTitle.textContent = title;
+      }
       renderUpdateProgress();
       updateProgressModal.hidden = false;
       progressTimer = setInterval(() => {

@@ -26,9 +26,15 @@ try {
             $app->error('지원하지 않는 초기화 범위입니다.', 400);
         }
 
+        $result = resetSystemData($app, $scope);
+
+        if ($scope === 'all') {
+            $app->clearAdminCookie();
+        }
+
         $app->success(
-            $scope === 'all' ? '출석 기록과 설정이 초기화되었습니다.' : '출석 기록이 초기화되었습니다.',
-            resetSystemData($app, $scope)
+            $scope === 'all' ? '모든 데이터가 초기화되었습니다. 초기 설치를 다시 진행해주세요.' : '출석 기록이 초기화되었습니다.',
+            $result
         );
     }
 
@@ -56,8 +62,24 @@ try {
             $app->error('현재 버전보다 높은 릴리즈만 설치할 수 있습니다.', 400);
         }
 
-        $result = installRelease($app, $release, $releaseInfo['repository']);
+        $result = installRelease($app, $release, $releaseInfo['repository'], 'pre-update');
         $app->success('업데이트가 완료되었습니다.', array_merge($releaseInfo, $result));
+    }
+
+    if ($type === 'repair_install') {
+        $app->requireFields($input, ['password']);
+        $app->verifyAdminPassword($input['password'] ?? '', 403);
+
+        $releaseInfo = githubReleaseInfo($app);
+        $tag = trim($app->string('app_version'));
+        $release = findReleaseByTag($releaseInfo['releases'], $tag);
+
+        if ($release === null) {
+            $app->error('현재 버전과 일치하는 릴리즈 태그를 찾을 수 없어 재설치할 수 없습니다.', 404);
+        }
+
+        $result = installRelease($app, $release, $releaseInfo['repository'], 'pre-repair');
+        $app->success('재설치(복구)가 완료되었습니다.', array_merge($releaseInfo, $result));
     }
 
     $app->error('지원하지 않는 시스템 요청입니다.', 400);
@@ -66,7 +88,7 @@ try {
 }
 
 /**
- * @return array{deleted_attendance: int, deleted_settings: int}
+ * @return array{deleted_attendance: int, deleted_settings: int, deleted_tokens: int, deleted_admins: int}
  */
 function resetSystemData(Controller $app, string $scope): array
 {
@@ -76,6 +98,8 @@ function resetSystemData(Controller $app, string $scope): array
     try {
         $deletedAttendance = (int) $pdo->exec('DELETE FROM attendance');
         $deletedSettings = 0;
+        $deletedTokens = 0;
+        $deletedAdmins = 0;
         $hasSequence = (int) $pdo
             ->query("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'sqlite_sequence'")
             ->fetchColumn();
@@ -86,6 +110,15 @@ function resetSystemData(Controller $app, string $scope): array
 
         if ($scope === 'all') {
             $deletedSettings = (int) $pdo->exec('DELETE FROM app_settings');
+            $deletedTokens = (int) $pdo->exec('DELETE FROM admin_tokens');
+            $deletedAdmins = (int) $pdo->exec('DELETE FROM admin');
+
+            if ($hasSequence > 0) {
+                $sequenceTables = ['attendance', 'admin', 'admin_tokens'];
+                $placeholders = implode(',', array_fill(0, count($sequenceTables), '?'));
+                $sequence = $pdo->prepare("DELETE FROM sqlite_sequence WHERE name IN ({$placeholders})");
+                $sequence->execute($sequenceTables);
+            }
         }
 
         $pdo->commit();
@@ -93,6 +126,8 @@ function resetSystemData(Controller $app, string $scope): array
         return [
             'deleted_attendance' => $deletedAttendance,
             'deleted_settings' => $deletedSettings,
+            'deleted_tokens' => $deletedTokens,
+            'deleted_admins' => $deletedAdmins,
         ];
     } catch (Throwable $exception) {
         $pdo->rollBack();
@@ -105,7 +140,7 @@ function resetSystemData(Controller $app, string $scope): array
  */
 function githubReleaseInfo(Controller $app): array
 {
-    [$owner, $repo] = repositoryParts(configuredRepository($app));
+    [$owner, $repo] = configuredRepositoryParts($app);
     $repository = [
         'owner' => $owner,
         'repo' => $repo,
@@ -196,11 +231,23 @@ function githubReleaseInfo(Controller $app): array
     ];
 }
 
-function configuredRepository(Controller $app): string
+/**
+ * @return array{0: string, 1: string}
+ */
+function configuredRepositoryParts(Controller $app): array
 {
-    $repository = normalizeRepositoryInput($app->string('update_repository'));
+    $owner = normalizeRepositoryInput($app->string('update_repository_owner'));
+    $repo = normalizeRepositoryInput($app->string('update_repository_name'));
 
-    return $repository !== '' ? $repository : normalizeRepositoryInput($app->string('repository_url'));
+    if ($owner !== '' && $repo !== '') {
+        return [$owner, $repo];
+    }
+
+    if ($owner !== '' || $repo !== '') {
+        throw new RuntimeException('update_repository_owner와 update_repository_name을 모두 설정해주세요.');
+    }
+
+    return repositoryParts($app->string('update_repository'));
 }
 
 function normalizeRepositoryInput(string $repository): string
@@ -476,7 +523,7 @@ function linuxPrettyName(): string
  * @param array<string, string> $repository
  * @return array<string, mixed>
  */
-function installRelease(Controller $app, array $release, array $repository): array
+function installRelease(Controller $app, array $release, array $repository, string $backupPrefix): array
 {
     if (!class_exists('ZipArchive')) {
         throw new RuntimeException('ZipArchive 확장이 필요합니다.');
@@ -518,7 +565,8 @@ function installRelease(Controller $app, array $release, array $repository): arr
 
     $zip->close();
     $sourceDir = locateExtractedSource($extractDir);
-    $backupPath = $backupsDir . DIRECTORY_SEPARATOR . 'pre-update-' . date('Ymd-His') . '.zip';
+    $safeBackupPrefix = preg_replace('/[^0-9A-Za-z._-]+/', '-', $backupPrefix) ?: 'pre-update';
+    $backupPath = $backupsDir . DIRECTORY_SEPARATOR . $safeBackupPrefix . '-' . date('Ymd-His') . '.zip';
     createBackup($root, $backupPath);
     copyUpdateFiles($sourceDir, $root);
     applyDatabaseSchema($app);

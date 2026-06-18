@@ -2,7 +2,7 @@
   <div>
     <p class="section-kicker">Edit Attendance</p>
     <h1>출석 기록 수정</h1>
-    <p>학생 정보, 출석일시, 위치 인증 정보를 함께 수정합니다.</p>
+    <p>운영상 필요한 학생 정보, 출석일시, 위치 인증 상태만 수정합니다.</p>
   </div>
 </div>
 
@@ -49,45 +49,10 @@
         </select>
       </div>
 
-      <div class="col-md-6">
-        <label class="form-label" for="locationLatitudeInput">위도</label>
-        <input class="form-control" id="locationLatitudeInput" type="number" inputmode="decimal" step="0.000001" min="-90" max="90" placeholder="비어 있으면 없음">
-      </div>
-
-      <div class="col-md-6">
-        <label class="form-label" for="locationLongitudeInput">경도</label>
-        <input class="form-control" id="locationLongitudeInput" type="number" inputmode="decimal" step="0.000001" min="-180" max="180" placeholder="비어 있으면 없음">
-      </div>
-
-      <div class="col-md-6">
-        <label class="form-label" for="locationAccuracyInput">위치 정확도</label>
-        <div class="input-group">
-          <input class="form-control" id="locationAccuracyInput" type="number" inputmode="decimal" step="0.1" min="0" placeholder="없음">
-          <span class="input-group-text">m</span>
-        </div>
-      </div>
-
-      <div class="col-md-6">
-        <label class="form-label" for="locationDistanceInput">중심과 거리</label>
-        <div class="input-group">
-          <input class="form-control" id="locationDistanceInput" type="number" inputmode="decimal" step="0.1" min="0" placeholder="없음">
-          <span class="input-group-text">m</span>
-        </div>
-      </div>
-
-      <div class="col-md-6">
-        <label class="form-label" for="locationCheckedAtInput">위치 확인 시각</label>
-        <input class="form-control" id="locationCheckedAtInput" type="datetime-local" step="1">
-      </div>
-
-      <div class="col-md-6">
-        <label class="form-label" for="locationApprovedAtInput">승인/반려 시각</label>
-        <input class="form-control" id="locationApprovedAtInput" type="datetime-local" step="1">
-      </div>
-
       <div class="col-12">
-        <label class="form-label" for="locationMessageInput">위치 메시지</label>
-        <textarea class="form-control" id="locationMessageInput" rows="3" placeholder="위치 인증 상세 사유"></textarea>
+        <div class="edit-readonly-note">
+          위치 좌표, 정확도, 거리, 위치 메시지와 인증 시각은 출석 당시 기록이므로 이 화면에서 직접 수정할 수 없습니다.
+        </div>
       </div>
     </div>
 
