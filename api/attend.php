@@ -70,9 +70,18 @@ try {
                 }
             }
         } else {
-            $message = trim((string) ($input['location_message'] ?? '위치 권한을 사용할 수 없어 관리자 승인 대기 상태입니다.'));
+            $locationUnavailableReason = (string) ($input['location_unavailable_reason'] ?? '');
+            $locationUnavailableMessages = [
+                'settings_unavailable' => '위치 설정을 확인할 수 없어 관리자 승인 대기 상태입니다.',
+                'insecure_context' => 'HTTPS가 아니어서 위치 권한을 요청할 수 없어 관리자 승인 대기 상태입니다.',
+                'unsupported' => '이 브라우저에서 위치 기능을 지원하지 않아 관리자 승인 대기 상태입니다.',
+                'permission_denied' => '위치 권한을 사용할 수 없어 관리자 승인 대기 상태입니다.',
+                'position_unavailable' => '현재 위치를 확인할 수 없어 관리자 승인 대기 상태입니다.',
+                'timeout' => '위치 확인 시간이 초과되어 관리자 승인 대기 상태입니다.',
+            ];
             $locationStatus = 'pending';
-            $locationMessage = $message === '' ? '위치 권한을 사용할 수 없어 관리자 승인 대기 상태입니다.' : $message;
+            $locationMessage = $locationUnavailableMessages[$locationUnavailableReason]
+                ?? '위치 인증을 완료할 수 없어 관리자 승인 대기 상태입니다.';
         }
     }
 
