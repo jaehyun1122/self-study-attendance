@@ -323,6 +323,11 @@ try {
 
     $locationDistanceMeters = $computed['distance'];
     $messageTemplate = (string) ($input['location_message_template'] ?? 'auto');
+    if ($locationStatusMode === 'auto') {
+        $messageTemplate = 'auto';
+        $locationApprovedAt = null;
+    }
+
     $allowedMessageTemplates = array_merge(['auto', 'custom'], array_keys($locationMessageTemplates));
 
     if (!in_array($messageTemplate, $allowedMessageTemplates, true)) {

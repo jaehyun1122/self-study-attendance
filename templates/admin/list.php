@@ -39,7 +39,7 @@
       <div class="filter-navigation">
         <button class="btn btn-sm btn-outline-secondary" id="previousFilterButton" type="button" disabled>이전</button>
         <button class="btn btn-sm btn-outline-secondary" id="nextFilterButton" type="button" disabled>이후</button>
-        <span class="filter-history-help" tabindex="0" data-tooltip="현재 화면에서 조회한 조건만 이전/이후로 이동합니다." aria-label="조회 조건 이동 안내">
+        <span class="filter-history-help" tabindex="0" data-tooltip="이전/이후 버튼으로 조회 조건을 되돌리거나 다시 복원할 수 있습니다. 최근 30개 조건만 기억합니다." aria-label="조회 조건 이동 안내">
           <i class="bi bi-info-circle"></i>
         </span>
       </div>

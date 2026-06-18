@@ -47,16 +47,16 @@
     </fieldset>
 
     <fieldset class="edit-section">
-      <legend class="edit-section-title"><i class="bi bi-geo-alt"></i> 위치 인증</legend>
+      <legend class="edit-section-title edit-location-title">
+        <span><i class="bi bi-geo-alt"></i> 위치 인증</span>
+        <span class="form-check form-switch edit-status-mode-switch">
+          <input class="form-check-input" id="locationStatusManualSwitch" type="checkbox" role="switch">
+          <label class="form-check-label" for="locationStatusManualSwitch">수동</label>
+        </span>
+      </legend>
       <div class="row g-3">
         <div class="col-md-6">
-          <div class="edit-status-label-row">
-            <label class="form-label mb-0" for="locationStatusEditInput">위치 인증 상태</label>
-            <div class="form-check form-switch edit-status-mode-switch">
-              <input class="form-check-input" id="locationStatusManualSwitch" type="checkbox" role="switch">
-              <label class="form-check-label" for="locationStatusManualSwitch">수동</label>
-            </div>
-          </div>
+          <label class="form-label" for="locationStatusEditInput">위치 인증 상태</label>
           <select class="form-select form-select-lg" id="locationStatusEditInput" disabled>
             <option value="unchecked">위치 인증 미사용</option>
             <option value="verified">위치 인증 완료</option>
@@ -93,7 +93,7 @@
         <div class="col-md-6">
           <label class="form-label" for="locationDistanceInput">중심과 거리</label>
           <div class="input-group input-group-lg">
-            <input class="form-control" id="locationDistanceInput" type="number" inputmode="decimal" min="0" step="0.1" readonly>
+            <input class="form-control" id="locationDistanceInput" type="number" inputmode="decimal" min="0" step="0.1" readonly disabled>
             <span class="input-group-text">m</span>
           </div>
           <div class="form-text">출석 가능 중심 좌표가 설정되어 있으면 자동 계산됩니다.</div>
@@ -130,7 +130,7 @@
           <button class="btn btn-sm btn-outline-secondary" id="clearEditLocationButton" type="button">
             <i class="bi bi-x-circle me-1"></i> 좌표 비우기
           </button>
-          <button class="btn btn-sm btn-outline-success" id="useCurrentEditLocationButton" type="button">
+          <button class="btn btn-sm btn-success" id="useCurrentEditLocationButton" type="button">
             <i class="bi bi-crosshair me-1"></i> 현재 위치 가져오기
           </button>
         </div>

@@ -768,6 +768,16 @@ body {
   font-size: 1rem;
 }
 
+.edit-location-title {
+  justify-content: space-between;
+}
+
+.edit-location-title > span:first-child {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .edit-status-label-row {
   display: flex;
   align-items: center;

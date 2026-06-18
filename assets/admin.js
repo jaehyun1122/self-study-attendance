@@ -1238,6 +1238,7 @@
     const accuracyInput = field('locationAccuracyInput');
     const distanceInput = field('locationDistanceInput');
     const checkedAtInput = field('locationCheckedAtInput');
+    const approvedAtInput = field('locationApprovedAtInput');
     const messageTemplateInput = field('locationMessageTemplateInput');
     const messageInput = field('locationMessageInput');
     const messageTemplates = {
@@ -1478,12 +1479,25 @@
 
     function updateLocationStatusModeState() {
       const manual = isManualLocationStatus();
+      const state = computedLocationState();
+
+      if (!manual) {
+        statusInput.value = state.status;
+        messageTemplateInput.value = 'auto';
+        messageInput.value = state.message;
+        approvedAtInput.value = '';
+      }
+
       statusInput.disabled = !manual;
+      distanceInput.disabled = true;
+      messageTemplateInput.disabled = !manual;
+      messageInput.disabled = !manual;
+      approvedAtInput.disabled = !manual;
 
       if (statusModeText) {
         statusModeText.textContent = manual
-          ? '수동 모드에서는 위치 인증 상태를 직접 선택할 수 있습니다.'
-          : '자동 모드에서는 좌표와 위치 설정을 기준으로 계산됩니다.';
+          ? '수동 모드에서는 상태, 메시지, 승인/반려 시각을 직접 조정할 수 있습니다.'
+          : '자동 모드에서는 상태, 거리, 메시지가 좌표와 위치 설정을 기준으로 계산됩니다.';
       }
     }
 
@@ -1533,9 +1547,6 @@
 
     function fillEditForm(record) {
       showEditForm();
-      if (statusManualSwitch) {
-        statusManualSwitch.checked = false;
-      }
       field('editIdInput').value = record.id;
       field('studentNoInput').value = record.student_no;
       field('nameInput').value = record.name;
@@ -1547,13 +1558,28 @@
       field('locationDistanceInput').value = record.location_distance_meters ?? '';
       field('locationMessageInput').value = record.location_message || '';
       field('locationCheckedAtInput').value = toDateTimeLocal(record.location_checked_at);
-      field('locationApprovedAtInput').value = toDateTimeLocal(record.location_approved_at);
-      messageTemplateInput.value = matchingMessageTemplate(record.location_message);
+      approvedAtInput.value = toDateTimeLocal(record.location_approved_at);
+      const messageTemplate = matchingMessageTemplate(record.location_message);
+      const computed = computedLocationState();
+      const savedStatus = record.location_status || 'unchecked';
+      const savedMessage = String(record.location_message || '').trim();
+      const hasManualValue = savedStatus !== computed.status
+        || (savedMessage !== '' && savedMessage !== computed.message)
+        || Boolean(record.location_approved_at);
+
+      if (statusManualSwitch) {
+        statusManualSwitch.checked = hasManualValue;
+      }
+
+      messageTemplateInput.value = hasManualValue ? messageTemplate : 'auto';
       updateEditMap();
       updateComputedLocationFields();
     }
 
     function readEditPayload(studentNo, name) {
+      const manual = isManualLocationStatus();
+      const computed = computedLocationState();
+
       return {
         type: 'update',
         id: Number(field('editIdInput').value),
@@ -1563,12 +1589,12 @@
         location_latitude: nullableNumber(field('locationLatitudeInput').value),
         location_longitude: nullableNumber(field('locationLongitudeInput').value),
         location_accuracy: nullableNumber(field('locationAccuracyInput').value),
-        location_status_mode: isManualLocationStatus() ? 'manual' : 'auto',
-        location_status: field('locationStatusEditInput').value,
-        location_message_template: field('locationMessageTemplateInput').value,
-        location_message: field('locationMessageInput').value.trim(),
+        location_status_mode: manual ? 'manual' : 'auto',
+        location_status: manual ? field('locationStatusEditInput').value : computed.status,
+        location_message_template: manual ? field('locationMessageTemplateInput').value : 'auto',
+        location_message: manual ? field('locationMessageInput').value.trim() : computed.message,
         location_checked_at: fromDateTimeLocal(field('locationCheckedAtInput').value) || null,
-        location_approved_at: fromDateTimeLocal(field('locationApprovedAtInput').value) || null,
+        location_approved_at: manual ? (fromDateTimeLocal(approvedAtInput.value) || null) : null,
       };
     }
 
@@ -1613,11 +1639,7 @@
 
     if (statusManualSwitch) {
       statusManualSwitch.addEventListener('change', () => {
-        if (!isManualLocationStatus()) {
-          statusInput.value = computedLocationState().status;
-        }
-
-        updateLocationStatusModeState();
+        updateComputedLocationFields();
       });
     }
 
