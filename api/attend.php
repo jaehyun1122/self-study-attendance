@@ -45,7 +45,7 @@ try {
 
             if (!$locationSettings['configured']) {
                 $locationStatus = 'pending';
-                $locationMessage = '위치 설정 미완료로 관리자 승인 대기 상태입니다.';
+                $locationMessage = '위치 설정을 확인할 수 없어 관리자 승인 이후 정상 출결로 처리됩니다.';
             } else {
                 $locationDistanceMeters = $app->distanceMeters(
                     $locationLatitude,
@@ -58,7 +58,7 @@ try {
                 if ($locationDistanceMeters > $radiusMeters) {
                     if (filter_var($input['location_override_confirmed'] ?? false, FILTER_VALIDATE_BOOL)) {
                         $locationStatus = 'pending';
-                        $locationMessage = '교내 출석 가능 범위를 벗어나 관리자 승인 대기 상태입니다.';
+                        $locationMessage = '교내 출석 가능 범위 밖으로 확인되어 관리자 승인 이후 정상 출결로 처리됩니다.';
                     } else {
                         $app->error('교내 출석 가능 범위를 벗어났습니다.', 200, [
                             'requires_location_confirmation' => true,
@@ -72,16 +72,16 @@ try {
         } else {
             $locationUnavailableReason = (string) ($input['location_unavailable_reason'] ?? '');
             $locationUnavailableMessages = [
-                'settings_unavailable' => '위치 설정을 확인할 수 없어 관리자 승인 대기 상태입니다.',
-                'insecure_context' => 'HTTPS가 아니어서 위치 권한을 요청할 수 없어 관리자 승인 대기 상태입니다.',
-                'unsupported' => '이 브라우저에서 위치 기능을 지원하지 않아 관리자 승인 대기 상태입니다.',
-                'permission_denied' => '위치 권한을 사용할 수 없어 관리자 승인 대기 상태입니다.',
-                'position_unavailable' => '현재 위치를 확인할 수 없어 관리자 승인 대기 상태입니다.',
-                'timeout' => '위치 확인 시간이 초과되어 관리자 승인 대기 상태입니다.',
+                'settings_unavailable' => '위치 설정을 확인할 수 없어 관리자 승인 이후 정상 출결로 처리됩니다.',
+                'insecure_context' => 'HTTPS가 아니어서 위치 권한을 요청할 수 없어 관리자 승인 이후 정상 출결로 처리됩니다.',
+                'unsupported' => '이 브라우저에서 위치 기능을 지원하지 않아 관리자 승인 이후 정상 출결로 처리됩니다.',
+                'permission_denied' => '위치 권한을 사용할 수 없어 관리자 승인 이후 정상 출결로 처리됩니다.',
+                'position_unavailable' => '현재 위치를 확인할 수 없어 관리자 승인 이후 정상 출결로 처리됩니다.',
+                'timeout' => '위치 확인 시간이 초과되어 관리자 승인 이후 정상 출결로 처리됩니다.',
             ];
             $locationStatus = 'pending';
             $locationMessage = $locationUnavailableMessages[$locationUnavailableReason]
-                ?? '위치 인증을 완료할 수 없어 관리자 승인 대기 상태입니다.';
+                ?? '위치 인증을 완료할 수 없어 관리자 승인 이후 정상 출결로 처리됩니다.';
         }
     }
 
@@ -152,7 +152,7 @@ try {
     }
 
     $successMessage = $locationStatus === 'pending'
-        ? '관리자 승인 대기 상태로 출석 요청이 기록되었습니다.'
+        ? '출석 요청이 기록되었습니다. 관리자 승인 이후 정상 출결로 처리됩니다.'
         : '성공적으로 처리되었습니다.';
 
     $app->success($successMessage, [

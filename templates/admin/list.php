@@ -18,10 +18,6 @@
         <input class="form-control" id="endDateInput" type="date" name="end_date" required>
       </div>
       <div>
-        <label class="form-label" for="keywordFilterInput">검색</label>
-        <input class="form-control" id="keywordFilterInput" type="search" autocomplete="off" placeholder="학번 또는 이름">
-      </div>
-      <div>
         <label class="form-label" for="locationStatusFilterInput">위치 인증</label>
         <select class="form-select" id="locationStatusFilterInput" name="location_status">
           <option value="">전체</option>
@@ -32,6 +28,10 @@
           <option value="rejected">반려</option>
         </select>
       </div>
+      <div>
+        <label class="form-label" for="keywordFilterInput">검색</label>
+        <input class="form-control" id="keywordFilterInput" type="search" autocomplete="off" placeholder="학번 또는 이름">
+      </div>
     </div>
     <input id="sortByInput" type="hidden" value="created_at">
     <input id="sortOrderInput" type="hidden" value="asc">
@@ -39,6 +39,9 @@
       <div class="filter-navigation">
         <button class="btn btn-sm btn-outline-secondary" id="previousFilterButton" type="button" disabled>이전</button>
         <button class="btn btn-sm btn-outline-secondary" id="nextFilterButton" type="button" disabled>이후</button>
+        <span class="filter-history-help" tabindex="0" data-tooltip="현재 화면에서 조회한 조건만 이전/이후로 이동합니다." aria-label="조회 조건 이동 안내">
+          <i class="bi bi-info-circle"></i>
+        </span>
       </div>
       <button class="btn btn-success px-4" id="loadListButton" type="submit">조회</button>
       <div class="list-bulk-actions">

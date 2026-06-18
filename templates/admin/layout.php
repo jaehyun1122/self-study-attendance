@@ -82,6 +82,7 @@
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
   <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.js"></script>
+  <script src="<?php echo $h($asset('/assets/public-utils.js')); ?>"></script>
   <script src="<?php echo $h($asset('/assets/admin.js')); ?>"></script>
 </body>
 </html>

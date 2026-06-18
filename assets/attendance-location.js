@@ -1,4 +1,6 @@
 (function () {
+  const APPROVAL_GUIDE = '출석을 계속하면 관리자 승인 이후 정상 출결로 처리됩니다.';
+
   function createLocationManager({ els, getStatusInfo, loadStatus }) {
     async function collectLocationPayload() {
       if (!getStatusInfo()) {
@@ -11,8 +13,8 @@
         const action = await openLocationDialog({
           variant: 'warning',
           title: '위치 설정 확인 불가',
-          message: '서버의 위치 설정을 확인할 수 없습니다.\n잠시 후 다시 시도해주세요.',
-          help: '네트워크 상태가 불안정하면 출석 가능 범위를 확인하지 못할 수 있습니다.\n인터넷 연결을 확인한 뒤 다시 위치 요청을 눌러주세요.',
+          message: '서버의 위치 설정을 확인할 수 없습니다.',
+          help: `다시 위치 요청을 눌러주세요.\n${APPROVAL_GUIDE}`,
           retry: true,
           override: true,
         });
@@ -35,8 +37,8 @@
         const action = await openLocationDialog({
           variant: 'danger',
           title: 'HTTPS 접속 필요',
-          message: '현재 접속 환경에서는 브라우저 위치 권한을 요청할 수 없습니다.\n안전한 주소에서 다시 접속해주세요.',
-          help: '위치 인증은 HTTPS 또는 localhost 같은 안전한 주소에서만 동작합니다.\nHTTPS 주소로 다시 접속한 뒤 출석을 시도해주세요.',
+          message: '현재 주소에서는 위치 권한을 요청할 수 없습니다.',
+          help: `HTTPS 주소에서 다시 접속해주세요.\n${APPROVAL_GUIDE}`,
           retry: false,
           override: true,
         });
@@ -48,8 +50,8 @@
         const action = await openLocationDialog({
           variant: 'danger',
           title: '위치 기능 미지원',
-          message: '이 브라우저에서는 위치 기능을 사용할 수 없습니다.\n다른 브라우저나 기기에서 다시 시도해주세요.',
-          help: `${browserLocationHelp()}\n\n위치 기능을 사용할 수 없으면 관리자 승인 대기 상태로 기록됩니다.`,
+          message: '이 브라우저에서는 위치 기능을 사용할 수 없습니다.',
+          help: `다른 브라우저나 기기에서 다시 시도해주세요.\n${APPROVAL_GUIDE}`,
           retry: false,
           override: true,
         });
@@ -74,13 +76,19 @@
             title: detail.title,
             message: detail.message,
             help: detail.help,
-            retry: true,
+            retry: !detail.refresh,
+            refresh: Boolean(detail.refresh),
             override: true,
           });
 
           if (action === 'retry') {
             permissionState = await geolocationPermissionState();
             continue;
+          }
+
+          if (action === 'refresh') {
+            window.location.reload();
+            return null;
           }
 
           return action === 'override' ? unverifiedLocationPayload(detail.pendingReason) : null;
@@ -138,8 +146,9 @@
         return {
           variant: 'danger',
           title: '위치 권한 사용 불가',
-          message: `${deniedMessage}\n위치 권한을 허용해야 교내 출석 여부를 확인할 수 있습니다.`,
-          help: `${browserLocationHelp()}\n\n권한을 바꾼 뒤 다시 위치 요청을 눌러주세요.\n계속 진행하면 관리자 승인 대기 상태로 기록됩니다.`,
+          message: deniedMessage,
+          help: `${browserLocationHelp()}\n권한을 허용한 뒤 새로고침하고 다시 출석해주세요.\n${APPROVAL_GUIDE}`,
+          refresh: true,
           pendingReason: 'permission_denied',
         };
       }
@@ -148,8 +157,8 @@
         return {
           variant: 'warning',
           title: '현재 위치 확인 불가',
-          message: '기기에서 현재 위치를 계산하지 못했습니다.\n위치 신호가 약하거나 일시적으로 불안정할 수 있습니다.',
-          help: 'Wi-Fi 또는 모바일 데이터를 켜주세요.\n실내라면 창가나 신호가 잘 잡히는 곳으로 이동해 다시 시도해주세요.\n계속 진행하면 관리자 승인 대기 상태로 기록됩니다.',
+          message: '현재 위치를 가져오지 못했습니다.',
+          help: `신호가 좋은 곳에서 다시 위치 요청을 눌러주세요.\n${APPROVAL_GUIDE}`,
           pendingReason: 'position_unavailable',
         };
       }
@@ -158,8 +167,8 @@
         return {
           variant: 'warning',
           title: '위치 확인 시간 초과',
-          message: '정해진 시간 안에 현재 위치를 가져오지 못했습니다.\n기기 위치 서비스 상태를 확인해주세요.',
-          help: '잠시 기다린 뒤 다시 위치 요청을 눌러주세요.\niPhone에서는 정확한 위치 허용이 꺼져 있으면 시간이 오래 걸릴 수 있습니다.\n계속 진행하면 관리자 승인 대기 상태로 기록됩니다.',
+          message: '정해진 시간 안에 위치를 가져오지 못했습니다.',
+          help: `잠시 후 다시 위치 요청을 눌러주세요.\n${APPROVAL_GUIDE}`,
           pendingReason: 'timeout',
         };
       }
@@ -167,8 +176,8 @@
       return {
         variant: 'danger',
         title: '위치 인증 실패',
-        message: '현재 위치를 확인하지 못했습니다.\n위치 인증을 다시 시도해주세요.',
-        help: `${browserLocationHelp()}\n\n문제가 계속되면 관리자 승인 대기 상태로 기록할 수 있습니다.`,
+        message: '현재 위치를 확인하지 못했습니다.',
+        help: `다시 위치 요청을 눌러주세요.\n${APPROVAL_GUIDE}`,
         pendingReason: 'unknown',
       };
     }
@@ -202,6 +211,7 @@
           message,
           help = '',
           retry = false,
+          refresh = false,
           override = false,
           variant = 'info',
         } = options;
@@ -213,7 +223,8 @@
         els.locationConfirmMessage.textContent = message;
         els.locationHelpBox.textContent = help;
         els.locationHelpBox.hidden = help.trim() === '';
-        els.requestLocationAgainButton.hidden = !retry;
+        els.requestLocationAgainButton.hidden = !retry && !refresh;
+        els.requestLocationAgainButton.textContent = refresh ? '새로고침' : '다시 위치 요청';
         els.confirmLocationOverrideButton.hidden = !override;
         els.locationConfirmModal.hidden = false;
 
@@ -227,7 +238,7 @@
         };
 
         els.cancelLocationConfirmButton.onclick = () => close('cancel');
-        els.requestLocationAgainButton.onclick = () => close('retry');
+        els.requestLocationAgainButton.onclick = () => close(refresh ? 'refresh' : 'retry');
         els.confirmLocationOverrideButton.onclick = () => close('override');
         els.locationConfirmModal.onclick = (event) => {
           if (event.target === els.locationConfirmModal) {

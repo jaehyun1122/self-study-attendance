@@ -1,11 +1,24 @@
 (function () {
   const TOKEN_KEY = 'admin_token';
-  const FILTER_HISTORY_KEY = 'attendance_filter_history';
   const FILTER_HISTORY_LIMIT = 24;
   const DEFAULT_SYNC_INTERVAL_MS = 5000;
   const DEFAULT_MAP_CENTER = [37.5665, 126.9780];
   const token = window.ADMIN_TOKEN || localStorage.getItem(TOKEN_KEY);
   const path = window.location.pathname;
+  const {
+    formatDateTime,
+    formatDateTimeText,
+    formatUptimeSeconds,
+    fromDateTimeLocal,
+    initPasswordToggles,
+    inputRange,
+    meterText,
+    nullableNumber,
+    parseServerTime,
+    toDateTimeLocal,
+    valueOrDash,
+    validateLength,
+  } = window.PublicUtils;
 
   let summaryServerTime = null;
   let summaryClockTimer = null;
@@ -208,82 +221,6 @@
     })[char]);
   }
 
-  function formatDateTime(date) {
-    return [
-      date.getFullYear(),
-      String(date.getMonth() + 1).padStart(2, '0'),
-      String(date.getDate()).padStart(2, '0'),
-    ].join('-') + ' ' + [
-      String(date.getHours()).padStart(2, '0'),
-      String(date.getMinutes()).padStart(2, '0'),
-      String(date.getSeconds()).padStart(2, '0'),
-    ].join(':');
-  }
-
-  function formatDateTimeText(value) {
-    const text = String(value || '').trim();
-
-    if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(text)) {
-      return text;
-    }
-
-    if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(text)) {
-      return `${text}:00`;
-    }
-
-    if (/^\d{4}-\d{2}-\d{2}$/.test(text)) {
-      return `${text} 00:00:00`;
-    }
-
-    const date = new Date(text);
-    return Number.isNaN(date.getTime()) ? text || '-' : formatDateTime(date);
-  }
-
-  function toDateTimeLocal(value) {
-    const text = formatDateTimeText(value);
-    return text === '-' ? '' : text.replace(' ', 'T');
-  }
-
-  function fromDateTimeLocal(value) {
-    const text = String(value || '').trim().replace('T', ' ');
-    return /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(text) ? `${text}:00` : text;
-  }
-
-  function nullableNumber(value) {
-    const text = String(value ?? '').trim();
-    const number = Number(text);
-    return text === '' || !Number.isFinite(number) ? null : number;
-  }
-
-  function valueOrDash(value, suffix = '') {
-    if (value === null || value === undefined || value === '') {
-      return '-';
-    }
-
-    return `${value}${suffix}`;
-  }
-
-  function meterText(value) {
-    return value === null || value === undefined || value === '' ? '-' : `${Number(value).toFixed(1)}m`;
-  }
-
-  function parseServerTime(value) {
-    const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/);
-
-    if (!match) {
-      return new Date();
-    }
-
-    return new Date(
-      Number(match[1]),
-      Number(match[2]) - 1,
-      Number(match[3]),
-      Number(match[4]),
-      Number(match[5]),
-      Number(match[6])
-    );
-  }
-
   function syncIntervalMs(result = null) {
     const seconds = Number(result?.server_time_sync_interval_seconds || 5);
     return Math.max(1, seconds) * 1000;
@@ -331,48 +268,6 @@
     summarySyncTimer = setInterval(() => loadSummary(false), summarySyncIntervalMs);
   }
 
-  function textLength(value) {
-    const text = String(value || '');
-
-    if (window.Intl?.Segmenter) {
-      return Array.from(new Intl.Segmenter('ko', { granularity: 'grapheme' }).segment(text)).length;
-    }
-
-    return Array.from(text).length;
-  }
-
-  function inputRange(input, fallbackMin, fallbackMax) {
-    const min = Number(input?.getAttribute('minlength') || fallbackMin);
-    const max = Number(input?.getAttribute('maxlength') || fallbackMax);
-    return {
-      min: Number.isFinite(min) ? min : fallbackMin,
-      max: Number.isFinite(max) ? max : fallbackMax,
-    };
-  }
-
-  function lengthMessage(subject, range) {
-    if (range.min === range.max) {
-      return `${subject} ${range.min}자로 입력해주세요.`;
-    }
-
-    if (range.min < 1) {
-      return `${subject} ${range.max}자까지 입력할 수 있습니다.`;
-    }
-
-    return `${subject} ${range.min}자 이상 ${range.max}자까지 입력할 수 있습니다.`;
-  }
-
-  function validateLength(value, subject, range) {
-    const length = textLength(value);
-
-    if (length < range.min || length > range.max) {
-      showAlert(lengthMessage(subject, range));
-      return false;
-    }
-
-    return true;
-  }
-
   function validateStudentInfo(studentNo, name) {
     const studentNoInput = document.getElementById('studentNoInput');
     const nameInput = document.getElementById('nameInput');
@@ -388,27 +283,6 @@
     }
 
     return validateLength(name, '이름은', inputRange(nameInput, 1, 10));
-  }
-
-  function initPasswordToggles(root = document) {
-    root.querySelectorAll('[data-password-toggle]').forEach((toggleButton) => {
-      toggleButton.addEventListener('click', () => {
-        const input = document.getElementById(toggleButton.dataset.passwordToggle || '');
-        const icon = toggleButton.querySelector('i');
-
-        if (!input) {
-          return;
-        }
-
-        const visible = input.type === 'text';
-        input.type = visible ? 'password' : 'text';
-        toggleButton.setAttribute('aria-label', visible ? '비밀번호 표시' : '비밀번호 숨기기');
-
-        if (icon) {
-          icon.className = visible ? 'bi bi-eye' : 'bi bi-eye-slash';
-        }
-      });
-    });
   }
 
   function locationStatusInfo(value) {
@@ -699,18 +573,11 @@
     }
 
     function loadFilterHistory() {
-      try {
-        const saved = JSON.parse(localStorage.getItem(FILTER_HISTORY_KEY) || '[]');
-        filterHistory = Array.isArray(saved)
-          ? saved.map((item) => normalizedFilters(item)).filter((item) => item.start_date && item.end_date)
-          : [];
-      } catch (error) {
-        filterHistory = [];
-      }
+      filterHistory = [];
     }
 
     function saveFilterHistory() {
-      localStorage.setItem(FILTER_HISTORY_KEY, JSON.stringify(filterHistory.slice(-FILTER_HISTORY_LIMIT)));
+      filterHistory = filterHistory.slice(-FILTER_HISTORY_LIMIT);
       updateFilterHistoryButtons();
     }
 
@@ -1333,7 +1200,31 @@
     const id = Number(params.get('id') || 0);
     const form = document.getElementById('editForm');
     const saveButton = document.getElementById('saveEditButton');
-    const field = (id) => document.getElementById(id);
+    const clearLocationButton = document.getElementById('clearEditLocationButton');
+    const useCurrentLocationButton = document.getElementById('useCurrentEditLocationButton');
+    const mapElement = document.getElementById('editLocationMap');
+    const field = (fieldId) => document.getElementById(fieldId);
+    const statusInput = field('locationStatusEditInput');
+    const latitudeInput = field('locationLatitudeInput');
+    const longitudeInput = field('locationLongitudeInput');
+    const accuracyInput = field('locationAccuracyInput');
+    const distanceInput = field('locationDistanceInput');
+    const checkedAtInput = field('locationCheckedAtInput');
+    const messageTemplateInput = field('locationMessageTemplateInput');
+    const messageInput = field('locationMessageInput');
+    const messageTemplates = {
+      verified: '위치 인증 완료',
+      pending_range: '교내 출석 가능 범위 밖으로 확인되어 관리자 승인 이후 정상 출결로 처리됩니다.',
+      pending_settings: '위치 설정을 확인할 수 없어 관리자 승인 이후 정상 출결로 처리됩니다.',
+      approved: '관리자 승인 완료',
+      rejected: '위치 인증이 관리자에 의해 반려되었습니다.',
+      unchecked: '위치 인증 미사용',
+    };
+    let editMap = null;
+    let editMarker = null;
+    let centerMarker = null;
+    let radiusCircle = null;
+    let locationSettings = {};
 
     if (!id) {
       showAlert('올바른 출석 기록을 선택해주세요.');
@@ -1341,8 +1232,270 @@
       return;
     }
 
-    api('/api/admin-edit.php', { type: 'get', id })
-      .then((data) => {
+    function initEditMap() {
+      if (editMap || !mapElement) {
+        return;
+      }
+
+      editMap = buildMap(mapElement, DEFAULT_MAP_CENTER, 13);
+
+      if (!editMap) {
+        return;
+      }
+
+      editMap.on('click', (event) => {
+        setEditLocationCoordinates(event.latlng.lat, event.latlng.lng, { touchCheckedAt: true });
+      });
+    }
+
+    function setEditLocationCoordinates(latitude, longitude, options = {}) {
+      latitudeInput.value = Number(latitude).toFixed(6);
+      longitudeInput.value = Number(longitude).toFixed(6);
+      if (options.touchCheckedAt) {
+        checkedAtInput.value = toDateTimeLocal(formatDateTime(new Date()));
+      }
+      updateEditMap();
+      updateComputedLocationFields();
+    }
+
+    function updateEditMap() {
+      initEditMap();
+
+      if (!editMap) {
+        return;
+      }
+
+      const latitude = nullableNumber(latitudeInput.value);
+      const longitude = nullableNumber(longitudeInput.value);
+      const hasCenter = hasConfiguredCenter();
+
+      renderAttendanceCenter();
+
+      if (latitude === null || longitude === null) {
+        if (editMarker) {
+          editMarker.remove();
+          editMarker = null;
+        }
+        editMap.setView(hasCenter ? settingsCenter() : DEFAULT_MAP_CENTER, hasCenter ? 17 : 13);
+        setTimeout(() => editMap.invalidateSize(), 50);
+        return;
+      }
+
+      const center = [latitude, longitude];
+
+      if (!editMarker) {
+        editMarker = window.L.marker(center, { draggable: true }).addTo(editMap);
+        editMarker.on('dragend', () => {
+          const latLng = editMarker.getLatLng();
+          setEditLocationCoordinates(latLng.lat, latLng.lng, { touchCheckedAt: true });
+        });
+      } else {
+        editMarker.setLatLng(center);
+      }
+
+      if (hasCenter) {
+        editMap.fitBounds([settingsCenter(), center], { padding: [36, 36], maxZoom: 17 });
+      } else {
+        editMap.setView(center, 17);
+      }
+      setTimeout(() => editMap.invalidateSize(), 50);
+    }
+
+    function renderAttendanceCenter() {
+      if (!editMap) {
+        return;
+      }
+
+      const hasCenter = hasConfiguredCenter();
+
+      if (!hasCenter) {
+        if (centerMarker) {
+          centerMarker.remove();
+          centerMarker = null;
+        }
+        if (radiusCircle) {
+          radiusCircle.remove();
+          radiusCircle = null;
+        }
+        return;
+      }
+
+      const center = settingsCenter();
+      const radius = nullableNumber(locationSettings.radius_meters);
+
+      if (!centerMarker) {
+        centerMarker = window.L.marker(center).addTo(editMap).bindPopup('출석 가능 중심');
+      } else {
+        centerMarker.setLatLng(center);
+      }
+
+      if (radius !== null) {
+        if (!radiusCircle) {
+          radiusCircle = window.L.circle(center, {
+            radius,
+            color: '#198754',
+            fillColor: '#198754',
+            fillOpacity: 0.12,
+          }).addTo(editMap);
+        } else {
+          radiusCircle.setLatLng(center);
+          radiusCircle.setRadius(radius);
+        }
+      } else if (radiusCircle) {
+        radiusCircle.remove();
+        radiusCircle = null;
+      }
+    }
+
+    function hasConfiguredCenter() {
+      return locationSettings.latitude !== null && locationSettings.latitude !== undefined
+        && locationSettings.longitude !== null && locationSettings.longitude !== undefined;
+    }
+
+    function settingsCenter() {
+      return [Number(locationSettings.latitude), Number(locationSettings.longitude)];
+    }
+
+    function settingsConfiguredForAttendance() {
+      return Boolean(locationSettings.configured)
+        && hasConfiguredCenter()
+        && locationSettings.radius_meters !== null
+        && locationSettings.radius_meters !== undefined;
+    }
+
+    function calculateDistanceMeters(fromLatitude, fromLongitude, toLatitude, toLongitude) {
+      const earthRadiusMeters = 6371000;
+      const fromLatRad = fromLatitude * Math.PI / 180;
+      const toLatRad = toLatitude * Math.PI / 180;
+      const deltaLat = (toLatitude - fromLatitude) * Math.PI / 180;
+      const deltaLng = (toLongitude - fromLongitude) * Math.PI / 180;
+      const a = Math.sin(deltaLat / 2) ** 2
+        + Math.cos(fromLatRad) * Math.cos(toLatRad) * Math.sin(deltaLng / 2) ** 2;
+
+      return earthRadiusMeters * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    }
+
+    function computedLocationState() {
+      const latitude = nullableNumber(latitudeInput.value);
+      const longitude = nullableNumber(longitudeInput.value);
+
+      if (latitude === null || longitude === null) {
+        return {
+          status: 'unchecked',
+          distance: null,
+          message: messageTemplates.unchecked,
+        };
+      }
+
+      if (!settingsConfiguredForAttendance()) {
+        return {
+          status: 'pending',
+          distance: null,
+          message: messageTemplates.pending_settings,
+        };
+      }
+
+      const distance = calculateDistanceMeters(latitude, longitude, Number(locationSettings.latitude), Number(locationSettings.longitude));
+      const radius = Number(locationSettings.radius_meters);
+
+      if (distance <= radius) {
+        return {
+          status: 'verified',
+          distance,
+          message: messageTemplates.verified,
+        };
+      }
+
+      return {
+        status: 'pending',
+        distance,
+        message: messageTemplates.pending_range,
+      };
+    }
+
+    function updateComputedLocationFields() {
+      const state = computedLocationState();
+      statusInput.value = state.status;
+      distanceInput.value = state.distance === null ? '' : state.distance.toFixed(1);
+
+      if (messageTemplateInput.value === 'auto') {
+        messageInput.value = state.message;
+      }
+
+      updateMessageEditState();
+    }
+
+    function updateMessageEditState() {
+      const template = messageTemplateInput.value;
+      const custom = template === 'custom';
+      messageInput.readOnly = !custom;
+
+      if (custom) {
+        return;
+      }
+
+      if (template === 'auto') {
+        messageInput.value = computedLocationState().message;
+        return;
+      }
+
+      messageInput.value = messageTemplates[template] || '';
+    }
+
+    function matchingMessageTemplate(message) {
+      const text = String(message || '').trim();
+      const entry = Object.entries(messageTemplates).find(([, value]) => value === text);
+      return entry ? entry[0] : (text ? 'custom' : 'auto');
+    }
+
+    function fillEditForm(record) {
+      field('editIdInput').value = record.id;
+      field('studentNoInput').value = record.student_no;
+      field('nameInput').value = record.name;
+      field('createdAtInput').value = toDateTimeLocal(record.attend_datetime || record.created_at);
+      field('locationStatusEditInput').value = record.location_status || 'unchecked';
+      field('locationLatitudeInput').value = record.location_latitude ?? '';
+      field('locationLongitudeInput').value = record.location_longitude ?? '';
+      field('locationAccuracyInput').value = record.location_accuracy ?? '';
+      field('locationDistanceInput').value = record.location_distance_meters ?? '';
+      field('locationMessageInput').value = record.location_message || '';
+      field('locationCheckedAtInput').value = toDateTimeLocal(record.location_checked_at);
+      field('locationApprovedAtInput').value = toDateTimeLocal(record.location_approved_at);
+      messageTemplateInput.value = matchingMessageTemplate(record.location_message);
+      updateEditMap();
+      updateComputedLocationFields();
+    }
+
+    function readEditPayload(studentNo, name) {
+      return {
+        type: 'update',
+        id: Number(field('editIdInput').value),
+        student_no: studentNo,
+        name,
+        created_at: fromDateTimeLocal(field('createdAtInput').value),
+        location_latitude: nullableNumber(field('locationLatitudeInput').value),
+        location_longitude: nullableNumber(field('locationLongitudeInput').value),
+        location_accuracy: nullableNumber(field('locationAccuracyInput').value),
+        location_message_template: field('locationMessageTemplateInput').value,
+        location_message: field('locationMessageInput').value.trim(),
+        location_checked_at: fromDateTimeLocal(field('locationCheckedAtInput').value) || null,
+        location_approved_at: fromDateTimeLocal(field('locationApprovedAtInput').value) || null,
+      };
+    }
+
+    async function loadLocationSettings() {
+      try {
+        const data = await api('/api/admin-location.php', { type: 'get' });
+        locationSettings = data?.status === 1 ? (data.result || {}) : {};
+      } catch (error) {
+        locationSettings = {};
+      }
+    }
+
+    async function loadEditRecord() {
+      try {
+        await loadLocationSettings();
+        const data = await api('/api/admin-edit.php', { type: 'get', id });
         if (!data) return;
 
         if (data.status !== 1) {
@@ -1351,18 +1504,62 @@
           return;
         }
 
-        const record = data.result;
-        field('editIdInput').value = record.id;
-        field('editDateInput').value = record.attend_date;
-        field('studentNoInput').value = record.student_no;
-        field('nameInput').value = record.name;
-        field('createdAtInput').value = toDateTimeLocal(record.attend_datetime || record.created_at);
-        field('locationStatusEditInput').value = record.location_status || 'unchecked';
-      })
-      .catch(() => {
+        fillEditForm(data.result);
+      } catch (error) {
         showAlert('출석 기록을 불러오는 중 오류가 발생했습니다.');
         form.hidden = true;
+      }
+    }
+
+    [latitudeInput, longitudeInput].forEach((input) => {
+      input.addEventListener('input', () => {
+        updateEditMap();
+        updateComputedLocationFields();
       });
+    });
+
+    messageTemplateInput.addEventListener('change', updateMessageEditState);
+
+    clearLocationButton.addEventListener('click', () => {
+      latitudeInput.value = '';
+      longitudeInput.value = '';
+      accuracyInput.value = '';
+      checkedAtInput.value = '';
+      updateEditMap();
+      updateComputedLocationFields();
+    });
+
+    useCurrentLocationButton.addEventListener('click', () => {
+      if (!window.isSecureContext) {
+        showAlert('현재 접속 환경에서는 위치 권한을 요청할 수 없습니다. HTTPS 주소로 접속해주세요.');
+        return;
+      }
+
+      if (!navigator.geolocation) {
+        showAlert('이 브라우저에서는 위치 기능을 사용할 수 없습니다.');
+        return;
+      }
+
+      clearAlert();
+      useCurrentLocationButton.disabled = true;
+      useCurrentLocationButton.innerHTML = '<i class="bi bi-hourglass-split me-1"></i> 확인 중...';
+
+      navigator.geolocation.getCurrentPosition((position) => {
+        setEditLocationCoordinates(position.coords.latitude, position.coords.longitude, { touchCheckedAt: true });
+        accuracyInput.value = Number(position.coords.accuracy || 0).toFixed(1);
+        toast('현재 위치를 입력했습니다.');
+        useCurrentLocationButton.disabled = false;
+        useCurrentLocationButton.innerHTML = '<i class="bi bi-crosshair me-1"></i> 현재 위치 가져오기';
+      }, () => {
+        showAlert('현재 위치를 가져오지 못했습니다. 브라우저 위치 권한을 확인해주세요.');
+        useCurrentLocationButton.disabled = false;
+        useCurrentLocationButton.innerHTML = '<i class="bi bi-crosshair me-1"></i> 현재 위치 가져오기';
+      }, {
+        enableHighAccuracy: true,
+        maximumAge: 0,
+        timeout: 10000,
+      });
+    });
 
     form.addEventListener('submit', async (event) => {
       event.preventDefault();
@@ -1379,14 +1576,7 @@
       }
 
       try {
-        const data = await api('/api/admin-edit.php', {
-          type: 'update',
-          id: Number(field('editIdInput').value),
-          student_no: studentNo,
-          name,
-          created_at: fromDateTimeLocal(field('createdAtInput').value),
-          location_status: field('locationStatusEditInput').value,
-        });
+        const data = await api('/api/admin-edit.php', readEditPayload(studentNo, name));
 
         if (!data) return;
 
@@ -1396,7 +1586,7 @@
         }
 
         toast('저장되었습니다.');
-        const date = data.result?.attend_date || field('createdAtInput').value.slice(0, 10) || field('editDateInput').value;
+        const date = data.result?.attend_date || field('createdAtInput').value.slice(0, 10) || todayForInput();
         window.location.href = `/admin/list.php?date=${encodeURIComponent(date)}`;
       } catch (error) {
         showAlert('저장 중 오류가 발생했습니다.');
@@ -1405,6 +1595,8 @@
         saveButton.textContent = '저장';
       }
     });
+
+    loadEditRecord();
   }
 
   function initSystem() {
@@ -1433,9 +1625,7 @@
     const updateProgressSteps = document.getElementById('updateProgressSteps');
     const serverInfoList = document.getElementById('serverInfoList');
     const progressStages = ['다운로드 중', '백업 중', '설치 중', '적용 중', '마무리 하는 중'];
-    const RELEASE_PREVIEW_LIMIT = 3;
     let releasesCache = [];
-    let releaseListExpanded = false;
     let progressTimer = null;
     let progressIndex = 0;
     let serverInfoServerTime = null;
@@ -1668,7 +1858,6 @@
           return;
         }
 
-        releaseListExpanded = false;
         renderUpdateInfo(data.result || {});
 
         if (showSuccess) {
@@ -1718,21 +1907,14 @@
         return;
       }
 
-      const visibleReleases = releaseListExpanded ? releasesCache : releasesCache.slice(0, RELEASE_PREVIEW_LIMIT);
-      const hiddenCount = Math.max(0, releasesCache.length - RELEASE_PREVIEW_LIMIT);
       releaseList.innerHTML = `
-        ${visibleReleases.map((release, index) => `
+        ${releasesCache.map((release, index) => `
           <button class="release-item release-item-button" type="button" data-release-index="${index}">
             <strong>${escapeHtml(release.tag_name)}</strong>
             <span>${escapeHtml(release.name || release.tag_name)}</span>
             <small>${escapeHtml(release.published_at_text || formatReleaseDate(release.published_at) || '태그')}</small>
           </button>
         `).join('')}
-        ${hiddenCount > 0 ? `
-          <button class="release-more-button" type="button" id="releaseMoreButton">
-            ${releaseListExpanded ? '접기' : `더보기 +${hiddenCount}`}
-          </button>
-        ` : ''}
       `;
 
       releaseList.querySelectorAll('[data-release-index]').forEach((button) => {
@@ -1744,13 +1926,6 @@
         });
       });
 
-      const releaseMoreButton = document.getElementById('releaseMoreButton');
-      if (releaseMoreButton) {
-        releaseMoreButton.addEventListener('click', () => {
-          releaseListExpanded = !releaseListExpanded;
-          renderReleaseList();
-        });
-      }
     }
 
     function formatReleaseDate(value) {
@@ -1852,18 +2027,6 @@
       if (uptimeText && serverInfoUptimeSeconds !== null) {
         uptimeText.textContent = formatUptimeSeconds(serverInfoUptimeSeconds);
       }
-    }
-
-    function formatUptimeSeconds(totalSeconds) {
-      let seconds = Math.max(0, Math.floor(Number(totalSeconds) || 0));
-      const days = Math.floor(seconds / 86400);
-      seconds %= 86400;
-      const hours = Math.floor(seconds / 3600);
-      seconds %= 3600;
-      const minutes = Math.floor(seconds / 60);
-      seconds %= 60;
-
-      return `${days}일 ${String(hours).padStart(2, '0')}시간 ${String(minutes).padStart(2, '0')}분 ${String(seconds).padStart(2, '0')}초`;
     }
 
     function scheduleServerInfoSync(info = null) {

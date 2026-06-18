@@ -153,14 +153,67 @@
     return Number.isNaN(date.getTime()) ? text : formatDateTime(date);
   }
 
+  function toDateTimeLocal(value) {
+    const text = formatDateTimeText(value);
+    return text ? text.replace(' ', 'T') : '';
+  }
+
+  function fromDateTimeLocal(value) {
+    const text = String(value || '').trim().replace('T', ' ');
+    return /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(text) ? `${text}:00` : text;
+  }
+
+  function nullableNumber(value) {
+    const text = String(value ?? '').trim();
+    const number = Number(text);
+    return text === '' || !Number.isFinite(number) ? null : number;
+  }
+
+  function valueOrDash(value, suffix = '') {
+    if (value === null || value === undefined || value === '') {
+      return '-';
+    }
+
+    return `${value}${suffix}`;
+  }
+
+  function meterText(value) {
+    return value === null || value === undefined || value === '' ? '-' : `${Number(value).toFixed(1)}m`;
+  }
+
+  function formatUptimeSeconds(totalSeconds) {
+    let seconds = Math.max(0, Math.floor(Number(totalSeconds) || 0));
+    const days = Math.floor(seconds / 86400);
+    seconds %= 86400;
+    const hours = Math.floor(seconds / 3600);
+    seconds %= 3600;
+    const minutes = Math.floor(seconds / 60);
+    seconds %= 60;
+
+    const parts = [];
+
+    if (days > 0) parts.push(`${days}일`);
+    if (hours > 0) parts.push(`${hours}시간`);
+    if (minutes > 0) parts.push(`${minutes}분`);
+    if (seconds > 0 || parts.length === 0) parts.push(`${seconds}초`);
+
+    return parts.join(' ');
+  }
+
   window.PublicUtils = {
     api,
     formatDateTime,
     formatDateTimeText,
+    formatUptimeSeconds,
+    fromDateTimeLocal,
     initPasswordToggles,
     inputRange,
+    meterText,
+    nullableNumber,
     parseServerTime,
     toast,
+    toDateTimeLocal,
+    valueOrDash,
     validateLength,
   };
 })();

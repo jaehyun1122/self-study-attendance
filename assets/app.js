@@ -32,6 +32,7 @@
     cancelLocationConfirmButton: document.getElementById('cancelLocationConfirmButton'),
     requestLocationAgainButton: document.getElementById('requestLocationAgainButton'),
     confirmLocationOverrideButton: document.getElementById('confirmLocationOverrideButton'),
+    attendanceLocationNotice: document.getElementById('attendanceLocationNotice'),
     studentText: document.getElementById('studentText'),
     attendButton: document.getElementById('attendButton'),
     serverTime: document.getElementById('serverTime'),
@@ -133,6 +134,7 @@
         syncServerTime(statusInfo.server_time);
       }
 
+      updateLocationNotice();
       scheduleStatusSync(statusInfo);
 
       if (data.status !== 1 && showError) {
@@ -196,6 +198,14 @@
     }
 
     els.serverTime.textContent = `현재시간: ${formatDateTime(serverTime)}`;
+  }
+
+  function updateLocationNotice() {
+    if (!els.attendanceLocationNotice) {
+      return;
+    }
+
+    els.attendanceLocationNotice.hidden = !statusInfo?.location?.enabled;
   }
 
   function showResult(kind, title, message, result) {
@@ -352,8 +362,8 @@
         const action = await locationManager.openLocationDialog({
           variant: 'danger',
           title: '교내 출석 확인 필요',
-          message: '현재 위치로는 교내 출석 여부를 확인할 수 없습니다.\n출석 가능 범위 밖으로 확인되었습니다.',
-          help: '실제로 교내에 있다면 위치가 부정확하게 잡혔을 수 있습니다.\n창가나 신호가 잘 잡히는 곳으로 이동한 뒤 다시 위치 요청을 눌러주세요.\n계속 진행하면 관리자 승인 대기 상태로 출석 요청이 기록됩니다.',
+          message: '출석 가능 범위 밖으로 확인되었습니다.',
+          help: '교내에 있다면 다시 위치 요청을 눌러주세요.\n출석을 계속하면 관리자 승인 이후 정상 출결로 처리됩니다.',
           retry: true,
           override: true,
         });

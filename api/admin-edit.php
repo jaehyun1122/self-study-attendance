@@ -84,6 +84,44 @@ try {
         return date('Y-m-d H:i:s', $timestamp);
     };
 
+    $nullableDateTime = static function (mixed $value, string $label) use ($normalizeDateTime): ?string {
+        if ($value === null) {
+            return null;
+        }
+
+        $text = trim(str_replace('T', ' ', (string) $value));
+
+        return $text === '' ? null : $normalizeDateTime($text, $label);
+    };
+
+    $nullableFloat = static function (mixed $value, string $label, ?float $min = null, ?float $max = null) use ($app): ?float {
+        if ($value === null) {
+            return null;
+        }
+
+        $text = trim((string) $value);
+
+        if ($text === '') {
+            return null;
+        }
+
+        if (!is_numeric($text)) {
+            $app->error("{$label}은 숫자로 입력해주세요.", 400);
+        }
+
+        $number = (float) $text;
+
+        if ($min !== null && $number < $min) {
+            $app->error("{$label}은 {$min} 이상이어야 합니다.", 400);
+        }
+
+        if ($max !== null && $number > $max) {
+            $app->error("{$label}은 {$max} 이하이어야 합니다.", 400);
+        }
+
+        return $number;
+    };
+
     $verifyAdminPassword = static function (mixed $password) use ($app): void {
         $app->verifyAdminPassword($password, 403);
     };
@@ -189,6 +227,56 @@ try {
         $app->error('지원하지 않는 수정 유형입니다.', 400);
     }
 
+    $locationMessageTemplates = [
+        'verified' => '위치 인증 완료',
+        'pending_range' => '교내 출석 가능 범위 밖으로 확인되어 관리자 승인 이후 정상 출결로 처리됩니다.',
+        'pending_settings' => '위치 설정을 확인할 수 없어 관리자 승인 이후 정상 출결로 처리됩니다.',
+        'approved' => '관리자 승인 완료',
+        'rejected' => '위치 인증이 관리자에 의해 반려되었습니다.',
+        'unchecked' => '위치 인증 미사용',
+    ];
+
+    $computedLocationState = static function (?float $latitude, ?float $longitude) use ($app, $locationMessageTemplates): array {
+        if ($latitude === null || $longitude === null) {
+            return [
+                'status' => 'unchecked',
+                'distance' => null,
+                'message' => $locationMessageTemplates['unchecked'],
+            ];
+        }
+
+        $settings = $app->locationSettings();
+
+        if (!$settings['configured']) {
+            return [
+                'status' => 'pending',
+                'distance' => null,
+                'message' => $locationMessageTemplates['pending_settings'],
+            ];
+        }
+
+        $distance = $app->distanceMeters(
+            $latitude,
+            $longitude,
+            (float) $settings['latitude'],
+            (float) $settings['longitude']
+        );
+
+        if ($distance > (int) $settings['radius_meters']) {
+            return [
+                'status' => 'pending',
+                'distance' => $distance,
+                'message' => $locationMessageTemplates['pending_range'],
+            ];
+        }
+
+        return [
+            'status' => 'verified',
+            'distance' => $distance,
+            'message' => $locationMessageTemplates['verified'],
+        ];
+    };
+
     $id = $idFromInput($input);
     $existing = $recordById($id);
     $student = $app->validatedStudentInput($input);
@@ -196,11 +284,41 @@ try {
     $name = $student['name'];
     $createdAt = $normalizeDateTime($input['created_at'] ?? ($input['attend_datetime'] ?? $existing['created_at']), '출석일시');
     $attendDate = substr($createdAt, 0, 10);
-    $statusOptions = ['unchecked', 'verified', 'pending', 'approved', 'rejected'];
-    $locationStatus = (string) ($input['location_status'] ?? ($existing['location_status'] ?? 'unchecked'));
 
-    if (!in_array($locationStatus, $statusOptions, true)) {
-        $app->error('지원하지 않는 위치 인증 상태입니다.', 400);
+    $locationLatitude = $nullableFloat($input['location_latitude'] ?? null, '위도', -90, 90);
+    $locationLongitude = $nullableFloat($input['location_longitude'] ?? null, '경도', -180, 180);
+    $locationAccuracy = $nullableFloat($input['location_accuracy'] ?? null, '정확도', 0);
+    $locationCheckedAt = $nullableDateTime($input['location_checked_at'] ?? null, '위치 확인 시각');
+    $locationApprovedAt = $nullableDateTime($input['location_approved_at'] ?? null, '승인/반려 시각');
+
+    if (($locationLatitude === null) !== ($locationLongitude === null)) {
+        $app->error('위도와 경도를 함께 입력해주세요.', 400);
+    }
+
+    if ($locationLatitude === null) {
+        $locationAccuracy = null;
+        $locationCheckedAt = null;
+    } elseif ($locationCheckedAt === null) {
+        $locationCheckedAt = $existing['location_checked_at'] ?: $app->now();
+    }
+
+    $computed = $computedLocationState($locationLatitude, $locationLongitude);
+    $locationStatus = $computed['status'];
+    $locationDistanceMeters = $computed['distance'];
+    $messageTemplate = (string) ($input['location_message_template'] ?? 'auto');
+    $allowedMessageTemplates = array_merge(['auto', 'custom'], array_keys($locationMessageTemplates));
+
+    if (!in_array($messageTemplate, $allowedMessageTemplates, true)) {
+        $app->error('지원하지 않는 위치 메시지 템플릿입니다.', 400);
+    }
+
+    if ($messageTemplate === 'custom') {
+        $locationMessageText = trim((string) ($input['location_message'] ?? ''));
+        $locationMessage = $locationMessageText === '' ? null : $locationMessageText;
+    } elseif ($messageTemplate === 'auto') {
+        $locationMessage = $computed['message'];
+    } else {
+        $locationMessage = $locationMessageTemplates[$messageTemplate];
     }
 
     $statement = $app->pdo()->prepare(
@@ -209,7 +327,14 @@ try {
             name = :name,
             attend_date = :attend_date,
             created_at = :created_at,
-            location_status = :location_status
+            location_status = :location_status,
+            location_latitude = :location_latitude,
+            location_longitude = :location_longitude,
+            location_accuracy = :location_accuracy,
+            location_distance_meters = :location_distance_meters,
+            location_message = :location_message,
+            location_checked_at = :location_checked_at,
+            location_approved_at = :location_approved_at
         WHERE id = :id'
     );
 
@@ -220,6 +345,13 @@ try {
             ':attend_date' => $attendDate,
             ':created_at' => $createdAt,
             ':location_status' => $locationStatus,
+            ':location_latitude' => $locationLatitude,
+            ':location_longitude' => $locationLongitude,
+            ':location_accuracy' => $locationAccuracy,
+            ':location_distance_meters' => $locationDistanceMeters,
+            ':location_message' => $locationMessage,
+            ':location_checked_at' => $locationCheckedAt,
+            ':location_approved_at' => $locationApprovedAt,
             ':id' => $id,
         ]);
     } catch (PDOException $exception) {

@@ -476,7 +476,25 @@ function formatUptime(int $seconds): string
     $minutes = intdiv($seconds, 60);
     $seconds %= 60;
 
-    return sprintf('%d일 %02d시간 %02d분 %02d초', $days, $hours, $minutes, $seconds);
+    $parts = [];
+
+    if ($days > 0) {
+        $parts[] = "{$days}일";
+    }
+
+    if ($hours > 0) {
+        $parts[] = "{$hours}시간";
+    }
+
+    if ($minutes > 0) {
+        $parts[] = "{$minutes}분";
+    }
+
+    if ($seconds > 0 || $parts === []) {
+        $parts[] = "{$seconds}초";
+    }
+
+    return implode(' ', $parts);
 }
 
 function serverOsText(): string
