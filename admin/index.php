@@ -12,8 +12,12 @@ $reason = trim((string) ($_GET['reason'] ?? ''));
 
 if ($reason !== '') {
     $app->clearAdminCookie();
-} elseif (is_string($token) && $app->checkAdminToken($token)) {
-    $app->redirect('/admin/dash.php');
+} elseif (is_string($token) && $token !== '') {
+    if ($app->checkAdminToken($token)) {
+        $app->redirect('/admin/dash.php');
+    }
+
+    $app->redirect('/admin/?reason=' . rawurlencode($app->adminTokenFailureReason()));
 }
 
 echo $app->renderTemplate('admin/login.php');

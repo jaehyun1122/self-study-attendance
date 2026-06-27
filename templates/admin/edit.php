@@ -6,8 +6,6 @@
   </div>
 </div>
 
-<div id="adminAlert"></div>
-
 <section class="admin-card form-card edit-form-card" id="editFormCard">
   <?php
     $studentNoRange = $app->lengthRange('student_no_length', 5, 5);

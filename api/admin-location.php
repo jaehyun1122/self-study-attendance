@@ -9,7 +9,6 @@ require_once __DIR__ . '/../App/Controller.php';
 $app = new Controller();
 
 try {
-    $app->assertRuntimeForApi();
     $app->requireMethod('POST');
     $app->requireAdminApi();
 
@@ -66,5 +65,5 @@ try {
 
     $app->success('위치 설정이 저장되었습니다.', $app->locationSettings());
 } catch (Throwable $exception) {
-    $app->error('위치 설정 처리 중 오류가 발생했습니다.', 500, ['detail' => $exception->getMessage()]);
+    $app->failWithException('위치 설정 처리 중 오류가 발생했습니다.', $exception);
 }

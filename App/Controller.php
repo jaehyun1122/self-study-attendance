@@ -21,20 +21,15 @@ final class Controller
 
     private bool $schemaReady = false;
 
+    private string $adminTokenFailureReason = 'login-required';
+
     public function __construct()
     {
         $config = require __DIR__ . '/../data/config.php';
         $this->config = is_array($config) ? $config : [];
         date_default_timezone_set($this->string('timezone', 'Asia/Seoul'));
         $this->database = new Database($this->config);
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    public function config(): array
-    {
-        return $this->config;
+        $this->sendSecurityHeaders();
     }
 
     public function get(string $key, mixed $default = null): mixed
@@ -118,28 +113,6 @@ final class Controller
         $value = $this->get($key, $default);
 
         return is_array($value) ? $value : $default;
-    }
-
-    public function bool(string $key, bool $default = false): bool
-    {
-        $value = $this->get($key, $default);
-
-        if (is_bool($value)) {
-            return $value;
-        }
-
-        if (is_scalar($value)) {
-            return filter_var($value, FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE) ?? $default;
-        }
-
-        return $default;
-    }
-
-    public function float(string $key, float $default = 0.0): float
-    {
-        $value = $this->get($key, $default);
-
-        return is_numeric($value) ? (float) $value : $default;
     }
 
     public function setting(string $key, mixed $default = null): mixed
@@ -410,6 +383,12 @@ final class Controller
             return [];
         }
 
+        $contentType = strtolower(trim(explode(';', (string) ($_SERVER['CONTENT_TYPE'] ?? ''))[0]));
+
+        if ($contentType !== 'application/json') {
+            $this->error('JSON Content-Type 요청만 허용됩니다.', 415);
+        }
+
         $input = json_decode($raw, true);
 
         if (!is_array($input)) {
@@ -437,16 +416,6 @@ final class Controller
                 $this->error('필수 입력값이 누락되었습니다: ' . $field, 400);
             }
         }
-    }
-
-    public function isRuntimeReady(): bool
-    {
-        return true;
-    }
-
-    public function assertRuntimeForApi(): void
-    {
-        return;
     }
 
     public function checkInstalled(): bool
@@ -480,23 +449,7 @@ final class Controller
         }
     }
 
-    public function getBearerToken(): ?string
-    {
-        $header = $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? null;
-
-        if ($header === null && function_exists('apache_request_headers')) {
-            $headers = apache_request_headers();
-            $header = $headers['Authorization'] ?? $headers['authorization'] ?? null;
-        }
-
-        if (!is_string($header) || !preg_match('/^Bearer\s+(.+)$/i', $header, $matches)) {
-            return null;
-        }
-
-        return trim($matches[1]);
-    }
-
-    public function checkAdminToken(string $token): bool
+    public function checkAdminToken(string $token, bool $active = true): bool
     {
         if ($token === '') {
             return false;
@@ -505,26 +458,64 @@ final class Controller
         try {
             $this->migrateInstalledDatabase();
             $now = $this->now();
-            $this->pdo()->prepare('DELETE FROM admin_tokens WHERE expired_at < :now')->execute([':now' => $now]);
-            $statement = $this->pdo()->prepare('SELECT id FROM admin_tokens WHERE token = :token AND expired_at >= :now');
+            $statement = $this->pdo()->prepare(
+                'SELECT id, expired_at FROM admin_tokens WHERE token = :token'
+            );
             $statement->execute([
                 ':token' => $this->hashToken($token),
-                ':now' => $now,
             ]);
-            $tokenId = $statement->fetchColumn();
+            $session = $statement->fetch();
 
-            if (!is_numeric($tokenId)) {
+            if (!is_array($session) || !is_numeric($session['id'] ?? null)) {
+                $this->adminTokenFailureReason = 'session-revoked';
                 return false;
             }
 
-            $touch = $this->pdo()->prepare('UPDATE admin_tokens SET last_seen_at = :last_seen_at WHERE id = :id');
-            $touch->execute([
-                ':last_seen_at' => $now,
-                ':id' => (int) $tokenId,
-            ]);
+            $expiresAt = new \DateTimeImmutable((string) $session['expired_at']);
+            $nowDateTime = new \DateTimeImmutable($now);
+
+            if ($expiresAt->getTimestamp() <= $nowDateTime->getTimestamp()) {
+                $delete = $this->pdo()->prepare('DELETE FROM admin_tokens WHERE id = :id');
+                $delete->execute([':id' => (int) $session['id']]);
+                $this->adminTokenFailureReason = 'session-expired';
+
+                return false;
+            }
+
+            if ($active) {
+                $remainingSeconds = $expiresAt->getTimestamp() - $nowDateTime->getTimestamp();
+                $extendThresholdSeconds = 3 * 60 * 60;
+
+                if ($remainingSeconds <= $extendThresholdSeconds) {
+                    $sessionHours = max(1, $this->int('token_expire_hours', 12));
+                    $expiresAt = $nowDateTime->modify("+{$sessionHours} hours");
+                    $touch = $this->pdo()->prepare(
+                        'UPDATE admin_tokens
+                         SET last_seen_at = :last_seen_at, expired_at = :expired_at
+                         WHERE id = :id'
+                    );
+                    $touch->execute([
+                        ':last_seen_at' => $now,
+                        ':expired_at' => $expiresAt->format('Y-m-d H:i:s'),
+                        ':id' => (int) $session['id'],
+                    ]);
+                    $this->setAdminCookie($token, $expiresAt->getTimestamp());
+                } else {
+                    $touch = $this->pdo()->prepare(
+                        'UPDATE admin_tokens SET last_seen_at = :last_seen_at WHERE id = :id'
+                    );
+                    $touch->execute([
+                        ':last_seen_at' => $now,
+                        ':id' => (int) $session['id'],
+                    ]);
+                }
+            }
+
+            $this->adminTokenFailureReason = '';
 
             return true;
         } catch (Throwable) {
+            $this->adminTokenFailureReason = 'session-expired';
             return false;
         }
     }
@@ -533,24 +524,15 @@ final class Controller
     {
         $this->requireInstalled();
         $cookieToken = $_COOKIE['admin_token'] ?? null;
-        $tokens = [];
-        $bearerToken = $this->getBearerToken();
+        $isActive = $this->isAdminActivityRequest();
 
-        if ($bearerToken !== null) {
-            $tokens[] = $bearerToken;
+        if (is_string($cookieToken) && $this->checkAdminToken($cookieToken, $isActive)) {
+            return $cookieToken;
         }
 
-        if (is_string($cookieToken) && !in_array($cookieToken, $tokens, true)) {
-            $tokens[] = $cookieToken;
-        }
-
-        foreach ($tokens as $token) {
-            if ($this->checkAdminToken($token)) {
-                return $token;
-            }
-        }
-
-        $this->error('로그인이 필요합니다.', 401);
+        $this->error('로그인이 필요합니다.', 401, [
+            'reason' => $this->adminTokenFailureReason,
+        ]);
     }
 
     public function requireAdminPage(): string
@@ -563,10 +545,20 @@ final class Controller
         }
 
         if (!$this->checkAdminToken($token)) {
-            $this->redirect('/admin/?reason=session-expired');
+            $this->redirect('/admin/?reason=' . rawurlencode($this->adminTokenFailureReason ?: 'session-expired'));
         }
 
         return $token;
+    }
+
+    private function isAdminActivityRequest(): bool
+    {
+        return ($_SERVER['HTTP_X_ADMIN_ACTIVITY'] ?? '') === '1';
+    }
+
+    public function adminTokenFailureReason(): string
+    {
+        return $this->adminTokenFailureReason ?: 'session-expired';
     }
 
     public function setAdminCookie(string $token, int $expires): void
@@ -599,11 +591,15 @@ final class Controller
 
     public function verifyAdminPassword(mixed $password, int $httpCode = 403): void
     {
+        $this->enforceAuthRateLimit('admin-sensitive');
         $admin = $this->pdo()->query('SELECT password_hash FROM admin ORDER BY id ASC LIMIT 1')->fetch();
 
         if (!$admin || !password_verify((string) $password, (string) $admin['password_hash'])) {
+            $this->recordAuthFailure('admin-sensitive');
             $this->error('관리자 비밀번호가 올바르지 않습니다.', $httpCode);
         }
+
+        $this->clearAuthFailures('admin-sensitive');
     }
 
     public function hashToken(string $token): string
@@ -611,11 +607,164 @@ final class Controller
         return hash('sha256', $token);
     }
 
+    public function enforceAuthRateLimit(string $scope): void
+    {
+        $this->migrateInstalledDatabase();
+        $identifier = hash('sha256', $this->clientIpAddress());
+        $now = new \DateTimeImmutable('now');
+        $cleanup = $this->pdo()->prepare('DELETE FROM auth_rate_limits WHERE updated_at < :cutoff');
+        $cleanup->execute([':cutoff' => $now->modify('-7 days')->format('Y-m-d H:i:s')]);
+        $statement = $this->pdo()->prepare(
+            'SELECT attempts, window_started_at, blocked_until
+             FROM auth_rate_limits
+             WHERE scope = :scope AND identifier = :identifier'
+        );
+        $statement->execute([
+            ':scope' => $scope,
+            ':identifier' => $identifier,
+        ]);
+        $row = $statement->fetch();
+
+        if (!is_array($row)) {
+            return;
+        }
+
+        $blockedUntil = $this->dateTimeOrNull($row['blocked_until'] ?? null);
+
+        if ($blockedUntil !== null && $blockedUntil > $now) {
+            $retryAfter = max(1, $blockedUntil->getTimestamp() - $now->getTimestamp());
+            header('Retry-After: ' . $retryAfter);
+            $this->error('요청이 너무 많습니다. 잠시 후 다시 시도해주세요.', 429);
+        }
+
+        $windowStartedAt = $this->dateTimeOrNull($row['window_started_at'] ?? null);
+        $windowSeconds = max(60, $this->int('auth_rate_limit.window_seconds', 300));
+
+        if ($windowStartedAt === null || $windowStartedAt->modify("+{$windowSeconds} seconds") <= $now) {
+            $this->clearAuthFailures($scope);
+        }
+    }
+
+    public function recordAuthFailure(string $scope): void
+    {
+        $this->migrateInstalledDatabase();
+        $identifier = hash('sha256', $this->clientIpAddress());
+        $now = new \DateTimeImmutable('now');
+        $nowText = $now->format('Y-m-d H:i:s');
+        $maxAttempts = max(3, $this->int('auth_rate_limit.max_attempts', 10));
+        $windowSeconds = max(60, $this->int('auth_rate_limit.window_seconds', 300));
+        $blockSeconds = max(60, $this->int('auth_rate_limit.block_seconds', 300));
+        $pdo = $this->pdo();
+        $pdo->beginTransaction();
+
+        try {
+            $select = $pdo->prepare(
+                'SELECT attempts, window_started_at
+                 FROM auth_rate_limits
+                 WHERE scope = :scope AND identifier = :identifier'
+            );
+            $select->execute([
+                ':scope' => $scope,
+                ':identifier' => $identifier,
+            ]);
+            $row = $select->fetch();
+            $windowStartedAt = is_array($row)
+                ? $this->dateTimeOrNull($row['window_started_at'] ?? null)
+                : null;
+            $attempts = is_array($row) ? (int) ($row['attempts'] ?? 0) : 0;
+
+            if ($windowStartedAt === null || $windowStartedAt->modify("+{$windowSeconds} seconds") <= $now) {
+                $windowStartedAt = $now;
+                $attempts = 0;
+            }
+
+            $attempts++;
+            $blockedUntil = $attempts >= $maxAttempts
+                ? $now->modify("+{$blockSeconds} seconds")
+                : null;
+            $upsert = $pdo->prepare(
+                'INSERT INTO auth_rate_limits (
+                    scope, identifier, attempts, window_started_at, blocked_until, updated_at
+                 ) VALUES (
+                    :scope, :identifier, :attempts, :window_started_at, :blocked_until, :updated_at
+                 )
+                 ON CONFLICT(scope, identifier) DO UPDATE SET
+                    attempts = excluded.attempts,
+                    window_started_at = excluded.window_started_at,
+                    blocked_until = excluded.blocked_until,
+                    updated_at = excluded.updated_at'
+            );
+            $upsert->execute([
+                ':scope' => $scope,
+                ':identifier' => $identifier,
+                ':attempts' => $attempts,
+                ':window_started_at' => $windowStartedAt->format('Y-m-d H:i:s'),
+                ':blocked_until' => $blockedUntil?->format('Y-m-d H:i:s'),
+                ':updated_at' => $nowText,
+            ]);
+            $pdo->commit();
+        } catch (Throwable $exception) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+
+            throw $exception;
+        }
+
+        if ($blockedUntil !== null) {
+            header('Retry-After: ' . $blockSeconds);
+            $this->error('요청이 너무 많습니다. 잠시 후 다시 시도해주세요.', 429);
+        }
+    }
+
+    public function clearAuthFailures(string $scope): void
+    {
+        $this->migrateInstalledDatabase();
+        $statement = $this->pdo()->prepare(
+            'DELETE FROM auth_rate_limits WHERE scope = :scope AND identifier = :identifier'
+        );
+        $statement->execute([
+            ':scope' => $scope,
+            ':identifier' => hash('sha256', $this->clientIpAddress()),
+        ]);
+    }
+
+    public function failWithException(string $message, Throwable $exception): never
+    {
+        try {
+            $errorId = bin2hex(random_bytes(8));
+        } catch (Throwable) {
+            $errorId = str_replace('.', '', uniqid('', true));
+        }
+
+        error_log(sprintf(
+            '[%s] %s: %s in %s:%d',
+            $errorId,
+            $exception::class,
+            $exception->getMessage(),
+            $exception->getFile(),
+            $exception->getLine()
+        ));
+        $this->error($message, 500, ['error_id' => $errorId]);
+    }
+
     public function clientIpAddress(): string
     {
-        $address = trim((string) ($_SERVER['REMOTE_ADDR'] ?? ''));
+        foreach ($this->array('proxy_ip_headers', []) as $headerName) {
+            if (!is_string($headerName)) {
+                continue;
+            }
 
-        return filter_var($address, FILTER_VALIDATE_IP) !== false ? $address : 'unknown';
+            $address = $this->clientIpFromHeader($headerName, $this->serverHeaderValue($headerName));
+
+            if ($address !== null) {
+                return $address;
+            }
+        }
+
+        $remoteAddress = trim((string) ($_SERVER['REMOTE_ADDR'] ?? ''));
+
+        return filter_var($remoteAddress, FILTER_VALIDATE_IP) !== false ? $remoteAddress : 'unknown';
     }
 
     public function clientUserAgent(): string
@@ -677,9 +826,6 @@ final class Controller
 
         $app = $this;
         $h = static fn (mixed $value): string => htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
-        $cfg = fn (string $key, mixed $default = null): mixed => $this->get($key, $default);
-        $cfgString = fn (string $key, string $default = ''): string => $this->string($key, $default);
-        $cfgInt = fn (string $key, int $default = 0): int => $this->int($key, $default);
         $asset = fn (string $path): string => $this->asset($path);
         extract($data, EXTR_SKIP);
 
@@ -703,6 +849,18 @@ final class Controller
                 updated_at TEXT NOT NULL
             )"
         );
+        $pdo->exec(
+            "CREATE TABLE IF NOT EXISTS auth_rate_limits (
+                scope TEXT NOT NULL,
+                identifier TEXT NOT NULL,
+                attempts INTEGER NOT NULL DEFAULT 0,
+                window_started_at TEXT NOT NULL,
+                blocked_until TEXT,
+                updated_at TEXT NOT NULL,
+                PRIMARY KEY (scope, identifier)
+            )"
+        );
+        $pdo->exec('CREATE INDEX IF NOT EXISTS idx_auth_rate_limits_updated_at ON auth_rate_limits(updated_at)');
 
         $hasAdminTokens = ((int) $pdo
             ->query("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'admin_tokens'")
@@ -764,12 +922,140 @@ final class Controller
         $addColumn('location_message', 'location_message TEXT');
         $addColumn('location_checked_at', 'location_checked_at TEXT');
         $addColumn('location_approved_at', 'location_approved_at TEXT');
+        $pdo->exec('CREATE INDEX IF NOT EXISTS idx_attendance_attend_date ON attendance(attend_date)');
+        $pdo->exec('CREATE INDEX IF NOT EXISTS idx_attendance_location_status ON attendance(location_status)');
+        $pdo->exec('CREATE INDEX IF NOT EXISTS idx_attendance_created_at ON attendance(created_at)');
 
         $this->schemaReady = true;
     }
 
     private function isHttps(): bool
     {
-        return isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== '' && $_SERVER['HTTPS'] !== 'off';
+        if (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== '' && $_SERVER['HTTPS'] !== 'off') {
+            return true;
+        }
+
+        foreach ($this->array('proxy_https_headers', []) as $headerName) {
+            if (!is_string($headerName)) {
+                continue;
+            }
+
+            $value = $this->serverHeaderValue($headerName);
+
+            if ($value === '') {
+                continue;
+            }
+
+            if (strcasecmp($headerName, 'CF-Visitor') === 0) {
+                $visitor = json_decode($value, true);
+
+                if (is_array($visitor) && strtolower((string) ($visitor['scheme'] ?? '')) === 'https') {
+                    return true;
+                }
+
+                continue;
+            }
+
+            if (strcasecmp($headerName, 'Forwarded') === 0) {
+                if (preg_match('/(?:^|[;,])\s*proto="?https"?(?:[;,]|$)/i', $value) === 1) {
+                    return true;
+                }
+
+                continue;
+            }
+
+            foreach (explode(',', strtolower($value)) as $item) {
+                if (in_array(trim($item), ['https', 'on', '1', '443', 'ssl'], true)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private function sendSecurityHeaders(): void
+    {
+        if (headers_sent()) {
+            return;
+        }
+
+        header('X-Content-Type-Options: nosniff');
+        header('X-Frame-Options: SAMEORIGIN');
+        header('Referrer-Policy: strict-origin-when-cross-origin');
+        header('Permissions-Policy: geolocation=(self)');
+    }
+
+    private function serverHeaderValue(string $headerName): string
+    {
+        $key = strtoupper(str_replace('-', '_', trim($headerName)));
+        $serverKey = str_starts_with($key, 'HTTP_') ? $key : 'HTTP_' . $key;
+
+        return trim((string) ($_SERVER[$serverKey] ?? ''));
+    }
+
+    private function clientIpFromHeader(string $headerName, string $value): ?string
+    {
+        if ($value === '') {
+            return null;
+        }
+
+        if (strcasecmp($headerName, 'Forwarded') === 0) {
+            preg_match_all(
+                '/(?:^|[,;])\s*for=(?:"([^"]+)"|([^,;\s]+))/i',
+                $value,
+                $matches,
+                PREG_SET_ORDER
+            );
+
+            foreach ($matches as $match) {
+                $quoted = (string) ($match[1] ?? '');
+                $address = $this->normalizeProxyIp($quoted !== '' ? $quoted : (string) ($match[2] ?? ''));
+
+                if ($address !== null) {
+                    return $address;
+                }
+            }
+
+            return null;
+        }
+
+        foreach (explode(',', $value) as $candidate) {
+            $address = $this->normalizeProxyIp($candidate);
+
+            if ($address !== null) {
+                return $address;
+            }
+        }
+
+        return null;
+    }
+
+    private function normalizeProxyIp(string $candidate): ?string
+    {
+        $value = trim($candidate, " \t\n\r\0\x0B\"'");
+
+        if (preg_match('/^\[([0-9a-f:.]+)\](?::\d+)?$/i', $value, $matches) === 1) {
+            $value = $matches[1];
+        } elseif (preg_match('/^(\d{1,3}(?:\.\d{1,3}){3}):\d+$/', $value, $matches) === 1) {
+            $value = $matches[1];
+        }
+
+        return filter_var($value, FILTER_VALIDATE_IP) !== false ? $value : null;
+    }
+
+    private function dateTimeOrNull(mixed $value): ?\DateTimeImmutable
+    {
+        $text = trim((string) $value);
+
+        if ($text === '') {
+            return null;
+        }
+
+        try {
+            return new \DateTimeImmutable($text);
+        } catch (Throwable) {
+            return null;
+        }
     }
 }

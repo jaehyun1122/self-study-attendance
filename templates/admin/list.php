@@ -53,8 +53,6 @@
   </form>
 </section>
 
-<div id="adminAlert"></div>
-
 <section class="admin-card">
   <div class="admin-card-header">
     <div>

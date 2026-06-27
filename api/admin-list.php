@@ -9,7 +9,6 @@ require_once __DIR__ . '/../App/Controller.php';
 $app = new Controller();
 
 try {
-    $app->assertRuntimeForApi();
     $app->requireMethod('POST');
     $app->requireAdminApi();
 
@@ -108,7 +107,7 @@ try {
 
     $app->success('성공적으로 처리되었습니다.', $rows);
 } catch (Throwable $exception) {
-    $app->error('출석 목록 조회 중 오류가 발생했습니다.', 500, ['detail' => $exception->getMessage()]);
+    $app->failWithException('출석 목록 조회 중 오류가 발생했습니다.', $exception);
 }
 
 /**

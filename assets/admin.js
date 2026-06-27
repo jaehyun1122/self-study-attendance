@@ -1,10 +1,9 @@
 (function () {
-  const TOKEN_KEY = 'admin_token';
-  const FILTER_HISTORY_KEY = 'attendance_filter_history_v1';
+  const FILTER_HISTORY_KEY = 'attendance_filter_history';
   const FILTER_HISTORY_LIMIT = 30;
   const DEFAULT_SYNC_INTERVAL_MS = 5000;
+  const ACTIVITY_WINDOW_MS = 5 * 60 * 1000;
   const DEFAULT_MAP_CENTER = [37.5665, 126.9780];
-  const token = window.ADMIN_TOKEN || localStorage.getItem(TOKEN_KEY);
   const path = window.location.pathname;
   const {
     formatDateTime,
@@ -25,10 +24,25 @@
   let summaryClockTimer = null;
   let summarySyncTimer = null;
   let summarySyncIntervalMs = DEFAULT_SYNC_INTERVAL_MS;
+  let lastAdminActivityAt = Date.now();
 
-  if (window.ADMIN_TOKEN) {
-    localStorage.setItem(TOKEN_KEY, window.ADMIN_TOKEN);
+  try {
+    localStorage.removeItem('admin_token');
+  } catch (error) {
+    // 기존 버전의 중복 토큰 정리 실패가 관리자 화면 실행을 막지 않도록 합니다.
   }
+
+  ['pointerdown', 'keydown', 'scroll', 'touchstart'].forEach((eventName) => {
+    window.addEventListener(eventName, () => {
+      lastAdminActivityAt = Date.now();
+    }, { passive: true });
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) {
+      lastAdminActivityAt = Date.now();
+    }
+  });
 
   function toast(message, type = 'success') {
     if (window.Toastify) {
@@ -163,13 +177,7 @@
     toast(message, type === 'danger' ? 'error' : 'success');
   }
 
-  function clearAlert() {
-    const box = document.getElementById('adminAlert');
-    if (box) box.innerHTML = '';
-  }
-
   function redirectLogin(reason = 'etc') {
-    localStorage.removeItem(TOKEN_KEY);
     window.location.href = `/admin/?reason=${encodeURIComponent(reason || 'etc')}`;
   }
 
@@ -178,8 +186,8 @@
       'Content-Type': 'application/json',
     };
 
-    if (token) {
-      headers.Authorization = `Bearer ${token}`;
+    if (!document.hidden && Date.now() - lastAdminActivityAt <= ACTIVITY_WINDOW_MS) {
+      headers['X-Admin-Activity'] = '1';
     }
 
     const response = await fetch(url, {
@@ -192,7 +200,7 @@
     const data = await response.json().catch(() => null);
 
     if (response.status === 401) {
-      redirectLogin('session-expired');
+      redirectLogin(data?.result?.reason || 'session-expired');
       return null;
     }
 
@@ -333,6 +341,7 @@
     const serverTime = document.getElementById('summaryServerTime');
     const gradeStatsList = document.getElementById('gradeStatsList');
     const charts = {};
+    let summaryRequestPending = false;
     const chartColors = {
       primary: '#198754',
       primarySoft: 'rgba(25, 135, 84, 0.16)',
@@ -356,8 +365,15 @@
       }
 
       if (charts[key]) {
-        charts[key].data = config.data;
-        charts[key].options = config.options;
+        charts[key].data.labels.splice(0, charts[key].data.labels.length, ...config.data.labels);
+        config.data.datasets.forEach((dataset, index) => {
+          if (charts[key].data.datasets[index]) {
+            Object.assign(charts[key].data.datasets[index], dataset);
+          } else {
+            charts[key].data.datasets.push(dataset);
+          }
+        });
+        charts[key].data.datasets.splice(config.data.datasets.length);
         charts[key].update();
         return;
       }
@@ -515,6 +531,12 @@
     }
 
     async function loadSummary(showError = true) {
+      if (summaryRequestPending) {
+        return;
+      }
+
+      summaryRequestPending = true;
+
       try {
         const data = await api('/api/admin-summary.php');
         if (!data) return;
@@ -551,6 +573,8 @@
         if (showError) {
           toast('대시보드 정보를 불러오는 중 오류가 발생했습니다.', 'error');
         }
+      } finally {
+        summaryRequestPending = false;
       }
     }
 
@@ -581,6 +605,7 @@
     let detailMap = null;
     let filterHistory = [];
     let filterHistoryIndex = -1;
+    let listRequestId = 0;
 
     startDateInput.value = params.get('start_date') || params.get('date') || todayForInput();
     endDateInput.value = params.get('end_date') || params.get('date') || startDateInput.value;
@@ -690,7 +715,7 @@
     }
 
     async function loadList() {
-      clearAlert();
+      const requestId = ++listRequestId;
       currentRows = [];
       renderLoading();
       updateSelectionState();
@@ -701,6 +726,7 @@
       try {
         const data = await api('/api/admin-list.php', readFilters());
         if (!data) return;
+        if (requestId !== listRequestId) return;
 
         if (data.status !== 1) {
           showAlert(data.msg || '출석 목록을 불러오지 못했습니다.');
@@ -710,12 +736,15 @@
 
         renderList(Array.isArray(data.result) ? data.result : []);
       } catch (error) {
+        if (requestId !== listRequestId) return;
         showAlert('출석 목록을 불러오는 중 오류가 발생했습니다.');
         renderTableNotice('출석 목록을 불러오지 못했습니다.', '네트워크 상태를 확인한 뒤 다시 조회해주세요.');
       } finally {
-        button.disabled = false;
-        exportButton.disabled = false;
-        button.textContent = '조회';
+        if (requestId === listRequestId) {
+          button.disabled = false;
+          exportButton.disabled = false;
+          button.textContent = '조회';
+        }
       }
     }
 
@@ -1323,8 +1352,6 @@
     }
 
     async function loadLocationSettings() {
-      clearAlert();
-
       try {
         const data = await api('/api/admin-location.php', { type: 'get' });
         if (!data) return;
@@ -1347,7 +1374,6 @@
 
     form.addEventListener('submit', async (event) => {
       event.preventDefault();
-      clearAlert();
       saveButton.disabled = true;
       saveButton.textContent = '저장 중...';
 
@@ -1381,7 +1407,6 @@
         return;
       }
 
-      clearAlert();
       useCurrentButton.disabled = true;
       useCurrentButton.innerHTML = '<i class="bi bi-hourglass-split me-1"></i> 확인 중...';
 
@@ -1858,7 +1883,6 @@
         return;
       }
 
-      clearAlert();
       useCurrentLocationButton.disabled = true;
       useCurrentLocationButton.innerHTML = '<i class="bi bi-hourglass-split me-1"></i> 확인 중...';
 
@@ -1881,7 +1905,6 @@
 
     form.addEventListener('submit', async (event) => {
       event.preventDefault();
-      clearAlert();
       saveButton.disabled = true;
       saveButton.textContent = '저장 중...';
       const studentNo = field('studentNoInput').value.trim();
@@ -1954,6 +1977,8 @@
     let serverInfoClockTimer = null;
     let serverInfoSyncTimer = null;
     let serverInfoSyncIntervalMs = DEFAULT_SYNC_INTERVAL_MS;
+    let serverInfoRequestPending = false;
+    let updateNoticeShown = false;
 
     if (!resetForm || !updateCheckButton) {
       return;
@@ -2006,7 +2031,6 @@
         resetPasswordInput.value = '';
         toast(data.msg || '초기화되었습니다.');
         if (isAll) {
-          localStorage.removeItem(TOKEN_KEY);
           window.location.href = '/install.php';
         }
       } catch (error) {
@@ -2103,7 +2127,7 @@
         await wait(500);
         await openAdminDialog({
           title: '업데이트 완료',
-          message: `${installedVersion} 업데이트 완료\n백업경로: ${backupPath}`,
+          message: `${installedVersion} 업데이트 완료\n백업경로: ${backupPath}\n\n변경 사항 적용을 위해 F5(새로고침)를 눌러주세요.`,
           confirmText: '확인',
           confirmClass: 'btn-success',
           type: 'info',
@@ -2121,8 +2145,8 @@
       event.preventDefault();
 
       const currentVersion = currentVersionText.textContent.trim();
-      const confirmed = await confirmAction(`${currentVersion} 파일을 다시 설치해 복구할까요? 데이터베이스와 설정 파일은 보존됩니다.`, {
-        title: '재설치(복구) 확인',
+      const confirmed = await confirmAction(`${currentVersion} 파일을 다시 설치할까요? 데이터베이스와 설정 파일은 보존됩니다.`, {
+        title: '재설치 확인',
         confirmText: '재설치',
         confirmClass: 'btn-success',
         type: 'info',
@@ -2134,7 +2158,7 @@
 
       repairInstallButton.disabled = true;
       repairInstallButton.textContent = '재설치 중...';
-      openUpdateProgress('재설치(복구) 중');
+      openUpdateProgress('재설치 중');
 
       try {
         const data = await api('/api/admin-system.php', {
@@ -2145,7 +2169,7 @@
 
         if (data.status !== 1) {
           closeUpdateProgress();
-          showAlert(data.msg || '재설치(복구)에 실패했습니다.');
+          showAlert(data.msg || '재설치에 실패했습니다.');
           return;
         }
 
@@ -2156,22 +2180,28 @@
         currentVersionText.textContent = installedVersion;
         await wait(500);
         await openAdminDialog({
-          title: '재설치(복구) 완료',
-          message: `${installedVersion} 재설치 완료\n백업경로: ${backupPath}`,
+          title: '재설치 완료',
+          message: `${installedVersion} 재설치 완료\n백업경로: ${backupPath}\n\n변경 사항 적용을 위해 F5(새로고침)를 눌러주세요.`,
           confirmText: '확인',
           confirmClass: 'btn-success',
           type: 'info',
         });
       } catch (error) {
         closeUpdateProgress();
-        showAlert('재설치(복구) 중 오류가 발생했습니다.');
+        showAlert('재설치 중 오류가 발생했습니다.');
       } finally {
         repairInstallButton.disabled = false;
-        repairInstallButton.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i> 재설치(복구)';
+        repairInstallButton.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i> 재설치';
       }
     });
 
     async function loadServerInfo() {
+      if (serverInfoRequestPending) {
+        return;
+      }
+
+      serverInfoRequestPending = true;
+
       try {
         const data = await api('/api/admin-system.php', { type: 'server_info' });
         if (!data) return;
@@ -2193,6 +2223,8 @@
         if (!serverInfoList.querySelector('[data-server-info-value]')) {
           serverInfoList.innerHTML = '<p class="text-secondary mb-0">서버 정보를 불러오지 못했습니다.</p>';
         }
+      } finally {
+        serverInfoRequestPending = false;
       }
     }
 
@@ -2224,9 +2256,9 @@
 
       adminSessionList.innerHTML = sessions.map((session) => `
         <article class="session-item ${session.is_current ? 'is-current' : ''}">
-          <div class="session-item-icon"><i class="bi ${session.is_current ? 'bi-laptop-fill' : 'bi-laptop'}"></i></div>
           <div class="session-item-body">
             <div class="session-item-title">
+              <i class="bi bi-laptop" aria-hidden="true"></i>
               <strong>${escapeHtml(session.ip_address || '알 수 없음')}</strong>
               ${session.is_current ? '<span class="badge text-bg-success">현재 세션</span>' : ''}
             </div>
@@ -2238,7 +2270,7 @@
             </dl>
           </div>
           <button class="btn btn-sm btn-outline-danger" type="button" data-revoke-session="${Number(session.id)}">
-            강제 로그아웃
+            로그아웃
           </button>
         </article>
       `).join('');
@@ -2249,10 +2281,10 @@
           const session = sessions.find((item) => Number(item.id) === sessionId);
           const message = session?.is_current
             ? '현재 세션을 종료하면 즉시 로그인 화면으로 이동합니다. 계속할까요?'
-            : '선택한 로그인 세션을 강제로 종료할까요?';
+            : '선택한 로그인 세션에서 로그아웃할까요?';
 
           if (!await confirmAction(message, {
-            title: '세션 강제 로그아웃',
+            title: '세션 로그아웃',
             confirmText: '로그아웃',
             confirmClass: 'btn-danger',
           })) {
@@ -2305,8 +2337,13 @@
 
         renderUpdateInfo(data.result || {});
 
-        if (showSuccess) {
-          toast(data.result?.update_available ? '설치 가능한 업데이트가 있습니다.' : '현재 최신 버전입니다.');
+        if (data.result?.update_available) {
+          if (!updateNoticeShown) {
+            updateNoticeShown = true;
+            toast('설치 가능한 업데이트가 있습니다.');
+          }
+        } else if (showSuccess) {
+          toast('현재 최신 버전입니다.');
         }
       } catch (error) {
         latestVersionText.textContent = '릴리즈 정보를 확인할 수 없습니다.';
@@ -2541,11 +2578,10 @@
 
     form.addEventListener('submit', async (event) => {
       event.preventDefault();
-      clearAlert();
       const newPassword = document.getElementById('newPasswordInput').value;
       const newPasswordConfirm = document.getElementById('newPasswordConfirmInput').value;
 
-      if (!validateLength(newPassword, '새 비밀번호는', inputRange(document.getElementById('newPasswordInput'), 4, 64))) {
+      if (!validateLength(newPassword, '새 비밀번호는', inputRange(document.getElementById('newPasswordInput'), 8, 64))) {
         return;
       }
 

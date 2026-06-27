@@ -4,7 +4,18 @@
   const passwordInput = document.getElementById('adminPasswordInput');
   const loginButton = document.getElementById('loginButton');
   const installNotice = document.getElementById('installNotice');
+  const forgotPasswordButton = document.getElementById('forgotPasswordButton');
+  const forgotPasswordModal = document.getElementById('forgotPasswordModal');
+  const closeForgotPasswordButton = document.getElementById('closeForgotPasswordButton');
+  const passwordResetCommand = document.getElementById('passwordResetCommand');
+  const copyPasswordResetCommandButton = document.getElementById('copyPasswordResetCommandButton');
   let isRedirecting = false;
+
+  try {
+    localStorage.removeItem('admin_token');
+  } catch (error) {
+    // 기존 버전의 중복 토큰 정리 실패가 로그인 화면 실행을 막지 않도록 합니다.
+  }
 
   function toast(message, type = 'success') {
     if (window.Toastify) {
@@ -50,6 +61,7 @@
 
   async function api(url, options = {}) {
     const response = await fetch(url, {
+      credentials: 'same-origin',
       ...options,
       headers: {
         'Content-Type': 'application/json',
@@ -82,13 +94,10 @@
   const params = new URLSearchParams(window.location.search);
   const reason = params.get('reason') || '';
 
-  if (reason) {
-    localStorage.removeItem('admin_token');
-  }
-
   const reasonMessages = {
     'login-required': ['로그인이 필요합니다.', 'error'],
     'session-expired': ['로그인 시간이 만료되었습니다. 다시 로그인해주세요.', 'error'],
+    'session-revoked': ['해당 세션에서 로그아웃되었습니다.', 'error'],
     'logout': ['로그아웃되었습니다.', 'success'],
     'password-change': ['비밀번호가 변경되었습니다. 다시 로그인해주세요.', 'success'],
     'etc': ['알 수 없는 이유로 로그아웃되었습니다. 다시 로그인해주세요.', 'error'],
@@ -107,6 +116,58 @@
   } else if (reason) {
     toast(`다시 로그인해주세요. (${reason})`, reasonMessages.etc[1]);
   }
+
+  function closeForgotPasswordModal() {
+    forgotPasswordModal.hidden = true;
+    forgotPasswordButton.focus();
+  }
+
+  forgotPasswordButton.addEventListener('click', () => {
+    forgotPasswordModal.hidden = false;
+    closeForgotPasswordButton.focus();
+  });
+  closeForgotPasswordButton.addEventListener('click', closeForgotPasswordModal);
+  copyPasswordResetCommandButton.addEventListener('click', async () => {
+    const command = passwordResetCommand.textContent.trim();
+    let copied = false;
+
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(command);
+        copied = true;
+      }
+    } catch (error) {
+      copied = false;
+    }
+
+    if (!copied) {
+      const copyInput = document.createElement('textarea');
+      copyInput.value = command;
+      copyInput.setAttribute('readonly', '');
+      copyInput.style.position = 'fixed';
+      copyInput.style.opacity = '0';
+      document.body.appendChild(copyInput);
+      copyInput.select();
+      copied = document.execCommand('copy');
+      copyInput.remove();
+    }
+
+    if (copied) {
+      toast('명령어를 복사했습니다.');
+    } else {
+      toast('명령어를 복사하지 못했습니다.', 'error');
+    }
+  });
+  forgotPasswordModal.addEventListener('click', (event) => {
+    if (event.target === forgotPasswordModal) {
+      closeForgotPasswordModal();
+    }
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !forgotPasswordModal.hidden) {
+      closeForgotPasswordModal();
+    }
+  });
 
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -136,7 +197,6 @@
         return;
       }
 
-      localStorage.setItem('admin_token', data.result.token);
       toast('로그인되었습니다.');
       loginButton.textContent = '이동 중...';
       isRedirecting = true;

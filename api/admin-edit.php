@@ -9,7 +9,6 @@ require_once __DIR__ . '/../App/Controller.php';
 $app = new Controller();
 
 try {
-    $app->assertRuntimeForApi();
     $app->requireMethod('POST');
     $app->requireAdminApi();
 
@@ -75,13 +74,18 @@ try {
             $app->error("{$label} 형식은 YYYY-MM-DD HH:mm:ss이어야 합니다.", 400);
         }
 
-        $timestamp = strtotime($text);
+        $dateTime = DateTimeImmutable::createFromFormat('!Y-m-d H:i:s', $text);
+        $errors = DateTimeImmutable::getLastErrors();
 
-        if ($timestamp === false) {
+        if (
+            !$dateTime instanceof DateTimeImmutable
+            || ($errors !== false && ($errors['warning_count'] > 0 || $errors['error_count'] > 0))
+            || $dateTime->format('Y-m-d H:i:s') !== $text
+        ) {
             $app->error("{$label}이 올바르지 않습니다.", 400);
         }
 
-        return date('Y-m-d H:i:s', $timestamp);
+        return $dateTime->format('Y-m-d H:i:s');
     };
 
     $nullableDateTime = static function (mixed $value, string $label) use ($normalizeDateTime): ?string {
@@ -389,5 +393,5 @@ try {
         'created_at' => $createdAt,
     ]);
 } catch (Throwable $exception) {
-    $app->error('출석 기록 저장 중 오류가 발생했습니다.', 500, ['detail' => $exception->getMessage()]);
+    $app->failWithException('출석 기록 저장 중 오류가 발생했습니다.', $exception);
 }

@@ -9,19 +9,21 @@ require_once __DIR__ . '/../App/Controller.php';
 $app = new Controller();
 
 try {
-    $app->assertRuntimeForApi();
     $app->requireMethod('POST');
     $app->requireInstalled();
 
     $input = $app->jsonInput();
     $app->requireFields($input, ['password']);
+    $app->enforceAuthRateLimit('admin-auth');
 
     $admin = $app->pdo()->query('SELECT id, password_hash FROM admin ORDER BY id ASC LIMIT 1')->fetch();
 
     if (!$admin || !password_verify((string) $input['password'], (string) $admin['password_hash'])) {
+        $app->recordAuthFailure('admin-auth');
         $app->error('관리자 비밀번호가 올바르지 않습니다.', 401);
     }
 
+    $app->clearAuthFailures('admin-auth');
     $token = bin2hex(random_bytes(32));
     $now = new DateTimeImmutable('now');
     $expiredAt = $now->add(new DateInterval('PT' . $app->int('token_expire_hours', 12) . 'H'));
@@ -44,7 +46,7 @@ try {
     ]);
 
     $app->setAdminCookie($token, $expiredAt->getTimestamp());
-    $app->success('로그인되었습니다.', ['token' => $token]);
+    $app->success('로그인되었습니다.');
 } catch (Throwable $exception) {
-    $app->error('로그인 중 오류가 발생했습니다.', 500, ['detail' => $exception->getMessage()]);
+    $app->failWithException('로그인 중 오류가 발생했습니다.', $exception);
 }

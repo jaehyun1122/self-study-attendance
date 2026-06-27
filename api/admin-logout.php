@@ -9,7 +9,6 @@ require_once __DIR__ . '/../App/Controller.php';
 $app = new Controller();
 
 try {
-    $app->assertRuntimeForApi();
     $app->requireMethod('POST');
 
     $token = $app->requireAdminApi();
@@ -17,5 +16,5 @@ try {
     $app->clearAdminCookie();
     $app->success('로그아웃되었습니다.');
 } catch (Throwable $exception) {
-    $app->error('로그아웃 중 오류가 발생했습니다.', 500, ['detail' => $exception->getMessage()]);
+    $app->failWithException('로그아웃 중 오류가 발생했습니다.', $exception);
 }

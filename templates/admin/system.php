@@ -6,8 +6,6 @@
   </div>
 </div>
 
-<div id="adminAlert"></div>
-
 <div class="system-grid">
   <div class="system-stack">
     <section class="admin-card form-card system-card">
@@ -59,23 +57,6 @@
     <section class="admin-card form-card system-card">
       <div class="system-card-heading">
         <div>
-          <span class="section-kicker">Server</span>
-          <h2>서버 정보</h2>
-        </div>
-        <i class="bi bi-hdd-network"></i>
-      </div>
-
-      <div class="server-info-list" id="serverInfoList">
-        <div class="empty-table-state">
-          <div class="loading-spinner" aria-hidden="true"></div>
-          <strong>서버 정보를 불러오는 중입니다.</strong>
-        </div>
-      </div>
-    </section>
-
-    <section class="admin-card form-card system-card">
-      <div class="system-card-heading">
-        <div>
           <span class="section-kicker">Sessions</span>
           <h2>로그인 세션</h2>
         </div>
@@ -83,7 +64,7 @@
       </div>
 
       <div class="session-card-actions">
-        <p class="form-text mb-0">현재 로그인된 기기와 최근 활동을 확인하고 세션을 강제로 종료할 수 있습니다.</p>
+        <p class="form-text mb-0">현재 로그인된 기기와 최근 활동을 확인하고 세션에서 로그아웃할 수 있습니다.</p>
         <button class="btn btn-sm btn-outline-danger" id="revokeOtherSessionsButton" type="button">
           다른 세션 모두 종료
         </button>
@@ -101,8 +82,8 @@
   <section class="admin-card form-card system-card system-update-card">
     <div class="system-card-heading">
       <div>
-        <span class="section-kicker">Update & Repair</span>
-        <h2>업데이트/복구</h2>
+        <span class="section-kicker">Update & Reinstall</span>
+        <h2>업데이트/재설치</h2>
       </div>
       <i class="bi bi-cloud-download"></i>
     </div>
@@ -143,8 +124,8 @@
 
     <form id="repairInstallForm" class="repair-install-form">
       <div>
-        <span class="section-kicker">Repair</span>
-        <h3>현재 버전 재설치(복구)</h3>
+        <span class="section-kicker">Reinstall</span>
+        <h3>현재 버전 재설치</h3>
         <p class="form-text mb-3">현재 버전 파일을 다시 내려받아 덮어씁니다. 데이터베이스와 <code>data/config.php</code>는 보존합니다.</p>
       </div>
 
@@ -158,12 +139,29 @@
 
       <div class="system-actions">
         <button class="btn btn-outline-success" id="repairInstallButton" type="submit">
-          <i class="bi bi-arrow-clockwise me-1"></i> 재설치(복구)
+          <i class="bi bi-arrow-clockwise me-1"></i> 재설치
         </button>
       </div>
     </form>
   </section>
 </div>
+
+<section class="admin-card form-card system-card system-server-card">
+  <div class="system-card-heading">
+    <div>
+      <span class="section-kicker">Server</span>
+      <h2>서버 정보</h2>
+    </div>
+    <i class="bi bi-hdd-network"></i>
+  </div>
+
+  <div class="server-info-list" id="serverInfoList">
+    <div class="empty-table-state">
+      <div class="loading-spinner" aria-hidden="true"></div>
+      <strong>서버 정보를 불러오는 중입니다.</strong>
+    </div>
+  </div>
+</section>
 
 <div class="admin-modal" id="releaseDetailModal" hidden>
   <section class="admin-modal-dialog release-detail-dialog" role="dialog" aria-modal="true" aria-labelledby="releaseDetailTitle">

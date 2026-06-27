@@ -6,8 +6,6 @@
   </div>
 </div>
 
-<div id="adminAlert"></div>
-
 <section class="admin-card form-card location-form-card">
   <form id="locationForm">
     <div class="form-check form-switch mb-4">

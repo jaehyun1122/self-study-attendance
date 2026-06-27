@@ -9,7 +9,6 @@ require_once __DIR__ . '/../App/Controller.php';
 $app = new Controller();
 
 try {
-    $app->assertRuntimeForApi();
     $app->requireMethod('POST');
     $app->requireAdminApi();
 
@@ -62,8 +61,8 @@ try {
             $app->error('현재 버전보다 높은 릴리즈만 설치할 수 있습니다.', 400);
         }
 
-        $result = installRelease($app, $release, $releaseInfo['repository'], 'pre-update');
-        $app->success('업데이트가 완료되었습니다.', array_merge($releaseInfo, $result));
+        $result = installRelease($app, $release, 'pre-update');
+        $app->success('업데이트가 완료되었습니다.', $result);
     }
 
     if ($type === 'repair_install') {
@@ -78,13 +77,13 @@ try {
             $app->error('현재 버전과 일치하는 릴리즈 태그를 찾을 수 없어 재설치할 수 없습니다.', 404);
         }
 
-        $result = installRelease($app, $release, $releaseInfo['repository'], 'pre-repair');
-        $app->success('재설치(복구)가 완료되었습니다.', array_merge($releaseInfo, $result));
+        $result = installRelease($app, $release, 'pre-repair');
+        $app->success('재설치가 완료되었습니다.', $result);
     }
 
     $app->error('지원하지 않는 시스템 요청입니다.', 400);
 } catch (Throwable $exception) {
-    $app->error('시스템 작업 중 오류가 발생했습니다.', 500, ['detail' => $exception->getMessage()]);
+    $app->failWithException('시스템 작업 중 오류가 발생했습니다.', $exception);
 }
 
 /**
@@ -111,6 +110,7 @@ function resetSystemData(Controller $app, string $scope): array
         if ($scope === 'all') {
             $deletedSettings = (int) $pdo->exec('DELETE FROM app_settings');
             $deletedTokens = (int) $pdo->exec('DELETE FROM admin_tokens');
+            $pdo->exec('DELETE FROM auth_rate_limits');
             $deletedAdmins = (int) $pdo->exec('DELETE FROM admin');
 
             if ($hasSequence > 0) {
@@ -432,8 +432,6 @@ function serverInfo(Controller $app): array
         'uptime' => $uptimeSeconds === null ? null : formatUptime($uptimeSeconds),
         'uptime_seconds' => $uptimeSeconds,
         'extensions' => $extensions,
-        'upload_max_filesize' => ini_get('upload_max_filesize') ?: '',
-        'post_max_size' => ini_get('post_max_size') ?: '',
         'memory_limit' => ini_get('memory_limit') ?: '',
         'allow_url_fopen' => filter_var(ini_get('allow_url_fopen'), FILTER_VALIDATE_BOOL),
     ];
@@ -538,10 +536,9 @@ function linuxPrettyName(): string
 
 /**
  * @param array<string, mixed> $release
- * @param array<string, string> $repository
  * @return array<string, mixed>
  */
-function installRelease(Controller $app, array $release, array $repository, string $backupPrefix): array
+function installRelease(Controller $app, array $release, string $backupPrefix): array
 {
     if (!class_exists('ZipArchive')) {
         throw new RuntimeException('ZipArchive 확장이 필요합니다.');
@@ -593,9 +590,7 @@ function installRelease(Controller $app, array $release, array $repository, stri
 
     return [
         'installed_version' => $tag,
-        'backup_path' => $backupPath,
-        'zip_path' => $zipPath,
-        'repository' => $repository,
+        'backup_path' => 'data/backups/' . basename($backupPath),
     ];
 }
 

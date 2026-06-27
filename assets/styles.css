@@ -149,6 +149,64 @@ body {
   margin-top: 8px;
 }
 
+.forgot-password-link {
+  display: block;
+  margin: 14px auto 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--app-primary);
+  font-size: 0.9rem;
+  font-weight: 750;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.forgot-password-dialog {
+  width: min(100%, 520px);
+}
+
+.forgot-password-dialog p {
+  line-height: 1.55;
+}
+
+.password-reset-command-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 42px;
+  gap: 8px;
+  align-items: stretch;
+  margin: 14px 0;
+}
+
+.password-reset-command {
+  display: flex;
+  align-items: center;
+  margin: 0;
+  padding: 13px 14px;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: #f8fbf9;
+  color: var(--app-text);
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+.password-reset-copy-button {
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--app-primary);
+  font-size: 1rem;
+}
+
+.password-reset-copy-button:hover,
+.password-reset-copy-button:focus-visible {
+  border-color: var(--app-primary);
+  background: var(--app-soft);
+}
+
 .toast-root {
   position: fixed;
   top: 16px;
@@ -730,49 +788,6 @@ body {
   text-align: right;
 }
 
-.admin-action-card {
-  min-height: 116px;
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 22px;
-  border: 1px solid var(--app-border);
-  border-radius: 8px;
-  background: #fff;
-  color: var(--app-text);
-  text-decoration: none;
-  box-shadow: 0 12px 32px rgba(24, 61, 42, 0.06);
-  transition: transform 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
-}
-
-.admin-action-card:hover {
-  border-color: rgba(25, 135, 84, 0.35);
-  box-shadow: 0 16px 42px rgba(25, 135, 84, 0.12);
-  transform: translateY(-2px);
-}
-
-.admin-action-card i {
-  width: 48px;
-  height: 48px;
-  display: grid;
-  place-items: center;
-  flex: 0 0 auto;
-  border-radius: 8px;
-  background: var(--app-soft);
-  color: var(--app-primary);
-  font-size: 1.35rem;
-}
-
-.admin-action-card strong,
-.admin-action-card small {
-  display: block;
-}
-
-.admin-action-card small {
-  margin-top: 4px;
-  color: var(--app-muted);
-}
-
 .attendance-time-box {
   display: grid;
   gap: 6px;
@@ -975,6 +990,11 @@ body {
 
 .system-card {
   max-width: none;
+}
+
+.system-server-card {
+  width: calc((100% - 18px) / 2);
+  margin-top: 18px;
 }
 
 .system-card-heading {
@@ -1220,15 +1240,15 @@ body {
 
 .session-list {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .session-item {
   display: grid;
-  grid-template-columns: 38px minmax(0, 1fr) auto;
-  gap: 12px;
-  align-items: start;
-  padding: 14px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: center;
+  padding: 16px;
   border: 1px solid var(--app-border);
   border-radius: 8px;
   background: #fff;
@@ -1236,17 +1256,7 @@ body {
 
 .session-item.is-current {
   border-color: rgba(25, 135, 84, 0.32);
-  background: var(--app-soft);
-}
-
-.session-item-icon {
-  width: 38px;
-  height: 38px;
-  display: grid;
-  place-items: center;
-  border-radius: 8px;
-  background: var(--app-soft);
-  color: var(--app-primary);
+  box-shadow: inset 3px 0 var(--app-primary);
 }
 
 .session-item-title {
@@ -1256,37 +1266,44 @@ body {
   flex-wrap: wrap;
 }
 
+.session-item-title > i {
+  color: var(--app-primary);
+}
+
 .session-user-agent {
   display: block;
   max-width: 100%;
-  margin-top: 3px;
-  overflow: hidden;
+  margin-top: 6px;
   color: var(--app-muted);
-  font-size: 0.78rem;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
 .session-meta {
-  display: flex;
-  gap: 12px 18px;
-  margin: 9px 0 0;
-  flex-wrap: wrap;
-  font-size: 0.76rem;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 12px 0 0;
+  font-size: 0.78rem;
 }
 
 .session-meta div {
-  display: flex;
-  gap: 5px;
+  min-width: 0;
+  padding: 9px 10px;
+  border-radius: 6px;
+  background: #f8fbf9;
 }
 
 .session-meta dt {
+  margin-bottom: 2px;
   color: var(--app-muted);
 }
 
 .session-meta dd {
   margin: 0;
   font-weight: 750;
+  overflow-wrap: anywhere;
 }
 
 .server-info-kv {
@@ -1460,6 +1477,10 @@ body {
     grid-template-columns: 1fr;
   }
 
+  .system-server-card {
+    width: 100%;
+  }
+
   .dashboard-stat-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -1568,16 +1589,14 @@ body {
   }
 
   .session-item {
-    grid-template-columns: 38px minmax(0, 1fr);
+    grid-template-columns: 1fr;
   }
 
   .session-item > .btn {
-    grid-column: 1 / -1;
     width: 100%;
   }
 
   .session-meta {
-    display: grid;
-    gap: 5px;
+    grid-template-columns: 1fr;
   }
 }

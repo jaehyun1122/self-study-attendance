@@ -15,7 +15,7 @@
   <link rel="apple-touch-icon" href="<?php echo $h($asset('/assets/logo.png')); ?>">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/toastify-js@1.12.0/src/toastify.min.css">
   <link rel="stylesheet" href="<?php echo $h($asset('/assets/styles.css')); ?>">
   <link rel="stylesheet" href="<?php echo $h($asset('/assets/public.css')); ?>">
 </head>
@@ -125,7 +125,7 @@
   </div>
 
   <div id="toastRoot" class="toast-root" aria-live="polite"></div>
-  <script src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/toastify-js@1.12.0"></script>
   <script src="<?php echo $h($asset('/assets/public-utils.js')); ?>"></script>
   <script src="<?php echo $h($asset('/assets/attendance-location.js')); ?>"></script>
   <script src="<?php echo $h($asset('/assets/app.js')); ?>"></script>

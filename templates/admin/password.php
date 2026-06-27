@@ -7,9 +7,7 @@
 </div>
 
 <section class="admin-card form-card">
-  <?php $passwordRange = $app->lengthRange('password_length', 4, 64); ?>
-  <div id="adminAlert"></div>
-
+  <?php $passwordRange = $app->lengthRange('password_length', 4, 32); ?>
   <form id="passwordForm">
     <div class="mb-3">
       <label class="form-label" for="oldPasswordInput">기존 비밀번호</label>
@@ -28,7 +26,7 @@
           <i class="bi bi-eye"></i>
         </button>
       </div>
-      <div class="form-text"><?php echo $h($app->lengthRequirementText('새 비밀번호는', 'password_length', 4, 64)); ?></div>
+      <div class="form-text"><?php echo $h($app->lengthRequirementText('새 비밀번호는', 'password_length', 4, 32)); ?></div>
     </div>
     <div class="mb-4">
       <label class="form-label" for="newPasswordConfirmInput">새 비밀번호 확인</label>

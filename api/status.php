@@ -7,6 +7,7 @@ use App\Controller;
 require_once __DIR__ . '/../App/Controller.php';
 
 $app = new Controller();
+$app->requireMethod('GET');
 
 $installed = $app->checkInstalled();
 $location = $installed ? $app->publicLocationStatus() : [
@@ -16,8 +17,6 @@ $location = $installed ? $app->publicLocationStatus() : [
 ];
 
 $status = [
-    'app_name' => $app->string('app_name'),
-    'version' => $app->string('app_version'),
     'installed' => $installed,
     'server_time' => $app->now(),
     'server_time_sync_interval_seconds' => $app->int('server_time_sync_interval_seconds', 5),

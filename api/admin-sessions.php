@@ -9,7 +9,6 @@ require_once __DIR__ . '/../App/Controller.php';
 $app = new Controller();
 
 try {
-    $app->assertRuntimeForApi();
     $app->requireMethod('POST');
     $currentToken = $app->requireAdminApi();
     $currentTokenHash = $app->hashToken($currentToken);
@@ -17,7 +16,7 @@ try {
     $type = (string) ($input['type'] ?? 'list');
     $now = $app->now();
 
-    $app->pdo()->prepare('DELETE FROM admin_tokens WHERE expired_at < :now')->execute([':now' => $now]);
+    $app->pdo()->prepare('DELETE FROM admin_tokens WHERE expired_at <= :now')->execute([':now' => $now]);
 
     if ($type === 'list') {
         $statement = $app->pdo()->prepare(
@@ -46,7 +45,6 @@ try {
 
         $app->success('로그인 세션을 불러왔습니다.', [
             'sessions' => $sessions,
-            'count' => count($sessions),
         ]);
     }
 
@@ -75,7 +73,7 @@ try {
             $app->clearAdminCookie();
         }
 
-        $app->success('선택한 세션을 강제 로그아웃했습니다.', [
+        $app->success('선택한 세션에서 로그아웃했습니다.', [
             'revoked_id' => (int) $sessionId,
             'revoked_current' => $isCurrent,
         ]);
@@ -85,12 +83,12 @@ try {
         $delete = $app->pdo()->prepare('DELETE FROM admin_tokens WHERE token <> :current_token');
         $delete->execute([':current_token' => $currentTokenHash]);
 
-        $app->success('현재 기기를 제외한 모든 세션을 강제 로그아웃했습니다.', [
+        $app->success('현재 기기를 제외한 모든 세션에서 로그아웃했습니다.', [
             'revoked_count' => $delete->rowCount(),
         ]);
     }
 
     $app->error('지원하지 않는 세션 요청입니다.', 400);
 } catch (Throwable $exception) {
-    $app->error('로그인 세션 처리 중 오류가 발생했습니다.', 500, ['detail' => $exception->getMessage()]);
+    $app->failWithException('로그인 세션 처리 중 오류가 발생했습니다.', $exception);
 }

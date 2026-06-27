@@ -50,6 +50,7 @@
   let statusInfo = null;
   let statusSyncTimer = null;
   let statusSyncIntervalMs = DEFAULT_SYNC_INTERVAL_MS;
+  let statusRequestPending = false;
   let studentEditTapCount = 0;
   let studentEditTapTimer = null;
   let isEditingStudent = false;
@@ -62,18 +63,44 @@
   function getStudentInfo() {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
-      return saved ? JSON.parse(saved) : null;
+      const student = saved ? JSON.parse(saved) : null;
+
+      if (
+        !student
+        || typeof student !== 'object'
+        || Array.isArray(student)
+        || typeof student.student_no !== 'string'
+        || typeof student.name !== 'string'
+      ) {
+        if (saved) {
+          localStorage.removeItem(STORAGE_KEY);
+        }
+
+        return null;
+      }
+
+      return student;
     } catch (error) {
-      localStorage.removeItem(STORAGE_KEY);
+      try {
+        localStorage.removeItem(STORAGE_KEY);
+      } catch (storageError) {
+        // 저장소 접근이 차단된 환경에서도 출석 화면은 계속 동작해야 합니다.
+      }
+
       return null;
     }
   }
 
   function saveStudentInfo(studentNo, name) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({
-      student_no: studentNo.trim(),
-      name: name.trim(),
-    }));
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        student_no: studentNo.trim(),
+        name: name.trim(),
+      }));
+      return true;
+    } catch (error) {
+      return false;
+    }
   }
 
   function validateStudentInfo(studentNo, name) {
@@ -121,6 +148,12 @@
   }
 
   async function loadStatus(showError = false) {
+    if (statusRequestPending) {
+      return;
+    }
+
+    statusRequestPending = true;
+
     try {
       const data = await api('/api/status.php', { method: 'GET' });
       statusInfo = data.result || null;
@@ -146,6 +179,8 @@
       if (showError) {
         toast('서버 상태를 확인할 수 없습니다.', 'error');
       }
+    } finally {
+      statusRequestPending = false;
     }
   }
 
@@ -279,7 +314,10 @@
       return;
     }
 
-    saveStudentInfo(studentNo, name);
+    if (!saveStudentInfo(studentNo, name)) {
+      toast('브라우저에 학생 정보를 저장할 수 없습니다.', 'error');
+      return;
+    }
     fillStudentForm({ student_no: studentNo, name });
     isEditingStudent = false;
     toast('학생 정보가 저장되었습니다.');

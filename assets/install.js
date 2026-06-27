@@ -38,7 +38,7 @@
       return;
     }
 
-    if (!validateLength(password, '관리자 비밀번호는', inputRange(adminPasswordInput, 4, 64))) {
+    if (!validateLength(password, '관리자 비밀번호는', inputRange(adminPasswordInput, 8, 64))) {
       return;
     }
 

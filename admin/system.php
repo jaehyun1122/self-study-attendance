@@ -7,10 +7,9 @@ use App\Controller;
 require_once __DIR__ . '/../App/Controller.php';
 
 $app = new Controller();
-$adminToken = $app->requireAdminPage();
+$app->requireAdminPage();
 
 $app->renderAdmin('admin/system.php', [
     'title' => '시스템 관리',
     'active' => 'system',
-    'adminToken' => $adminToken,
 ]);

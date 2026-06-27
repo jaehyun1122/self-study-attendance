@@ -8,8 +8,10 @@
   <link rel="apple-touch-icon" href="<?php echo $h($asset('/assets/logo.png')); ?>">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/toastify-js@1.12.0/src/toastify.min.css">
+  <?php if (in_array(($active ?? ''), ['list', 'location'], true)): ?>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.css">
+  <?php endif; ?>
   <link rel="stylesheet" href="<?php echo $h($asset('/assets/styles.css')); ?>">
 </head>
 <body class="bg-body-tertiary">
@@ -78,10 +80,11 @@
   </div>
 
   <div id="toastRoot" class="toast-root" aria-live="polite"></div>
-  <script>window.ADMIN_TOKEN = <?php echo json_encode($adminToken ?? null, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT); ?>;</script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/toastify-js@1.12.0"></script>
+  <?php if (in_array(($active ?? ''), ['list', 'location'], true)): ?>
+    <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.js"></script>
+  <?php endif; ?>
   <?php if (($active ?? '') === 'dash'): ?>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
   <?php endif; ?>

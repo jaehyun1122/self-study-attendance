@@ -9,7 +9,6 @@ require_once __DIR__ . '/../App/Controller.php';
 $app = new Controller();
 
 try {
-    $app->assertRuntimeForApi();
     $app->requireMethod('POST');
     $app->requireAdminApi();
 
@@ -139,10 +138,9 @@ try {
         'grade_stats' => $gradeStats,
         'location_stats' => $locationStats,
         'hourly_stats' => $hourlyStats,
-        'location' => $app->locationSettings(),
         'server_time' => $app->now(),
         'server_time_sync_interval_seconds' => $app->int('server_time_sync_interval_seconds', 5),
     ]);
 } catch (Throwable $exception) {
-    $app->error('대시보드 정보를 불러오는 중 오류가 발생했습니다.', 500, ['detail' => $exception->getMessage()]);
+    $app->failWithException('대시보드 정보를 불러오는 중 오류가 발생했습니다.', $exception);
 }

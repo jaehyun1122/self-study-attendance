@@ -1,0 +1,29 @@
+# Disable directory listings and use index.php as the directory index.
+Options -Indexes
+DirectoryIndex index.php
+
+# Apply baseline security headers to PHP and static responses.
+<IfModule mod_headers.c>
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set X-Frame-Options "SAMEORIGIN"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+  Header always set Permissions-Policy "geolocation=(self)"
+</IfModule>
+
+# Block direct web access to application internals and private data.
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteRule ^(?:App|cli|data|templates)(?:/|$) - [F,L,NC]
+  RewriteRule ^(?:\.git|\.agents|\.codex)(?:/|$) - [F,L,NC]
+</IfModule>
+
+# Protect hidden files, SQLite databases, schemas, and backup archives.
+<FilesMatch "(?i)(^\.|\.sqlite(?:-.+)?$|\.sql$|\.zip$)">
+  <IfModule mod_authz_core.c>
+    Require all denied
+  </IfModule>
+  <IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+  </IfModule>
+</FilesMatch>
