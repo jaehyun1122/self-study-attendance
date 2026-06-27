@@ -503,15 +503,27 @@ final class Controller
         }
 
         try {
+            $this->migrateInstalledDatabase();
             $now = $this->now();
             $this->pdo()->prepare('DELETE FROM admin_tokens WHERE expired_at < :now')->execute([':now' => $now]);
-            $statement = $this->pdo()->prepare('SELECT COUNT(*) FROM admin_tokens WHERE token = :token AND expired_at >= :now');
+            $statement = $this->pdo()->prepare('SELECT id FROM admin_tokens WHERE token = :token AND expired_at >= :now');
             $statement->execute([
                 ':token' => $this->hashToken($token),
                 ':now' => $now,
             ]);
+            $tokenId = $statement->fetchColumn();
 
-            return (int) $statement->fetchColumn() > 0;
+            if (!is_numeric($tokenId)) {
+                return false;
+            }
+
+            $touch = $this->pdo()->prepare('UPDATE admin_tokens SET last_seen_at = :last_seen_at WHERE id = :id');
+            $touch->execute([
+                ':last_seen_at' => $now,
+                ':id' => (int) $tokenId,
+            ]);
+
+            return true;
         } catch (Throwable) {
             return false;
         }
@@ -599,6 +611,26 @@ final class Controller
         return hash('sha256', $token);
     }
 
+    public function clientIpAddress(): string
+    {
+        $address = trim((string) ($_SERVER['REMOTE_ADDR'] ?? ''));
+
+        return filter_var($address, FILTER_VALIDATE_IP) !== false ? $address : 'unknown';
+    }
+
+    public function clientUserAgent(): string
+    {
+        $userAgent = trim((string) ($_SERVER['HTTP_USER_AGENT'] ?? '알 수 없음'));
+
+        if ($userAgent === '') {
+            return '알 수 없음';
+        }
+
+        return function_exists('mb_substr')
+            ? mb_substr($userAgent, 0, 500, 'UTF-8')
+            : substr($userAgent, 0, 500);
+    }
+
     public function asset(string $path): string
     {
         $assetPath = '/' . ltrim($path, '/');
@@ -671,6 +703,33 @@ final class Controller
                 updated_at TEXT NOT NULL
             )"
         );
+
+        $hasAdminTokens = ((int) $pdo
+            ->query("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'admin_tokens'")
+            ->fetchColumn()) > 0;
+
+        if ($hasAdminTokens) {
+            $tokenColumns = [];
+            foreach ($pdo->query('PRAGMA table_info(admin_tokens)')->fetchAll() as $column) {
+                if (isset($column['name'])) {
+                    $tokenColumns[(string) $column['name']] = true;
+                }
+            }
+
+            $tokenColumnDefinitions = [
+                'last_seen_at' => 'last_seen_at TEXT',
+                'ip_address' => 'ip_address TEXT',
+                'user_agent' => 'user_agent TEXT',
+            ];
+
+            foreach ($tokenColumnDefinitions as $name => $definition) {
+                if (!isset($tokenColumns[$name])) {
+                    $pdo->exec("ALTER TABLE admin_tokens ADD COLUMN {$definition}");
+                }
+            }
+
+            $pdo->exec('CREATE INDEX IF NOT EXISTS idx_admin_tokens_expired_at ON admin_tokens(expired_at)');
+        }
 
         $hasAttendance = ((int) $pdo
             ->query("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'attendance'")

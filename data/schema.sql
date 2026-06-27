@@ -26,8 +26,13 @@ CREATE TABLE IF NOT EXISTS admin_tokens (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   token TEXT NOT NULL UNIQUE,
   created_at TEXT NOT NULL,
-  expired_at TEXT NOT NULL
+  expired_at TEXT NOT NULL,
+  last_seen_at TEXT,
+  ip_address TEXT,
+  user_agent TEXT
 );
+
+CREATE INDEX IF NOT EXISTS idx_admin_tokens_expired_at ON admin_tokens(expired_at);
 
 CREATE TABLE IF NOT EXISTS app_settings (
   setting_key TEXT PRIMARY KEY,

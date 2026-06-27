@@ -14,18 +14,18 @@ try {
     $app->requireAdminApi();
 
     $input = $app->jsonInput();
-    $legacyDate = trim((string) ($input['date'] ?? ''));
-    $startDate = trim((string) ($input['start_date'] ?? ($legacyDate !== '' ? $legacyDate : $app->today())));
-    $endDate = trim((string) ($input['end_date'] ?? $startDate));
-    $studentNo = trim((string) ($input['student_no'] ?? ''));
-    $name = trim((string) ($input['name'] ?? ''));
-    $locationStatus = trim((string) ($input['location_status'] ?? ($input['status'] ?? '')));
-    $keyword = trim((string) ($input['keyword'] ?? ''));
-    $sortBy = (string) ($input['sort_by'] ?? 'created_at');
-    $sortOrderValue = (string) ($input['sort_order'] ?? ($input['sort_dir'] ?? 'asc'));
+    $legacyDate = filterText($app, $input, 'date', 10);
+    $startDate = filterText($app, $input, 'start_date', 10, $legacyDate !== '' ? $legacyDate : $app->today());
+    $endDate = filterText($app, $input, 'end_date', 10, $startDate);
+    $studentNo = filterText($app, $input, 'student_no', 20);
+    $name = filterText($app, $input, 'name', 50);
+    $locationStatus = filterText($app, $input, 'location_status', 20, filterText($app, $input, 'status', 20));
+    $keyword = filterText($app, $input, 'keyword', 50);
+    $sortBy = filterText($app, $input, 'sort_by', 30, 'created_at');
+    $sortOrderValue = filterText($app, $input, 'sort_order', 4, filterText($app, $input, 'sort_dir', 4, 'asc'));
     $sortOrder = strtolower($sortOrderValue) === 'desc' ? 'DESC' : 'ASC';
 
-    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $startDate) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $endDate)) {
+    if (!validDate($startDate) || !validDate($endDate)) {
         $app->error('날짜 형식은 YYYY-MM-DD이어야 합니다.', 400);
     }
 
@@ -40,18 +40,22 @@ try {
     ];
 
     if ($studentNo !== '') {
-        $where[] = 'student_no LIKE :student_no';
-        $params[':student_no'] = '%' . $studentNo . '%';
+        if (!preg_match('/^\d+$/', $studentNo)) {
+            $app->error('학번 검색은 숫자만 입력할 수 있습니다.', 400);
+        }
+
+        $where[] = "student_no LIKE :student_no ESCAPE '\\'";
+        $params[':student_no'] = '%' . escapeLike($studentNo) . '%';
     }
 
     if ($name !== '') {
-        $where[] = 'name LIKE :name';
-        $params[':name'] = '%' . $name . '%';
+        $where[] = "name LIKE :name ESCAPE '\\'";
+        $params[':name'] = '%' . escapeLike($name) . '%';
     }
 
     if ($keyword !== '') {
-        $where[] = '(student_no LIKE :keyword OR name LIKE :keyword)';
-        $params[':keyword'] = '%' . $keyword . '%';
+        $where[] = "(student_no LIKE :keyword ESCAPE '\\' OR name LIKE :keyword ESCAPE '\\')";
+        $params[':keyword'] = '%' . escapeLike($keyword) . '%';
     }
 
     $statusOptions = ['unchecked', 'verified', 'pending', 'approved', 'rejected'];
@@ -105,4 +109,40 @@ try {
     $app->success('성공적으로 처리되었습니다.', $rows);
 } catch (Throwable $exception) {
     $app->error('출석 목록 조회 중 오류가 발생했습니다.', 500, ['detail' => $exception->getMessage()]);
+}
+
+/**
+ * @param array<string, mixed> $input
+ */
+function filterText(Controller $app, array $input, string $key, int $maxLength, string $default = ''): string
+{
+    if (!array_key_exists($key, $input)) {
+        return $default;
+    }
+
+    if (!is_string($input[$key]) && !is_numeric($input[$key])) {
+        $app->error("{$key} 입력 형식이 올바르지 않습니다.", 400);
+    }
+
+    $value = trim((string) $input[$key]);
+
+    if ($app->textLength($value) > $maxLength) {
+        $app->error("{$key} 입력은 {$maxLength}자 이하여야 합니다.", 400);
+    }
+
+    return $value;
+}
+
+function validDate(string $value): bool
+{
+    if (!preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $value, $matches)) {
+        return false;
+    }
+
+    return checkdate((int) $matches[2], (int) $matches[3], (int) $matches[1]);
+}
+
+function escapeLike(string $value): string
+{
+    return str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $value);
 }

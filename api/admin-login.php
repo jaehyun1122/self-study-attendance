@@ -27,11 +27,20 @@ try {
     $expiredAt = $now->add(new DateInterval('PT' . $app->int('token_expire_hours', 12) . 'H'));
     $format = 'Y-m-d H:i:s';
 
-    $statement = $app->pdo()->prepare('INSERT INTO admin_tokens (token, created_at, expired_at) VALUES (:token, :created_at, :expired_at)');
+    $statement = $app->pdo()->prepare(
+        'INSERT INTO admin_tokens (
+            token, created_at, expired_at, last_seen_at, ip_address, user_agent
+        ) VALUES (
+            :token, :created_at, :expired_at, :last_seen_at, :ip_address, :user_agent
+        )'
+    );
     $statement->execute([
         ':token' => $app->hashToken($token),
         ':created_at' => $now->format($format),
         ':expired_at' => $expiredAt->format($format),
+        ':last_seen_at' => $now->format($format),
+        ':ip_address' => $app->clientIpAddress(),
+        ':user_agent' => $app->clientUserAgent(),
     ]);
 
     $app->setAdminCookie($token, $expiredAt->getTimestamp());

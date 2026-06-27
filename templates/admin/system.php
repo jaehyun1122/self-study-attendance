@@ -72,6 +72,30 @@
         </div>
       </div>
     </section>
+
+    <section class="admin-card form-card system-card">
+      <div class="system-card-heading">
+        <div>
+          <span class="section-kicker">Sessions</span>
+          <h2>로그인 세션</h2>
+        </div>
+        <i class="bi bi-laptop"></i>
+      </div>
+
+      <div class="session-card-actions">
+        <p class="form-text mb-0">현재 로그인된 기기와 최근 활동을 확인하고 세션을 강제로 종료할 수 있습니다.</p>
+        <button class="btn btn-sm btn-outline-danger" id="revokeOtherSessionsButton" type="button">
+          다른 세션 모두 종료
+        </button>
+      </div>
+
+      <div class="session-list" id="adminSessionList">
+        <div class="empty-table-state">
+          <div class="loading-spinner" aria-hidden="true"></div>
+          <strong>로그인 세션을 불러오는 중입니다.</strong>
+        </div>
+      </div>
+    </section>
   </div>
 
   <section class="admin-card form-card system-card system-update-card">

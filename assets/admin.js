@@ -327,8 +327,192 @@
   function initDash() {
     const todayCount = document.getElementById('todayCount');
     const totalCount = document.getElementById('totalCount');
+    const studentCount = document.getElementById('studentCount');
+    const todayRate = document.getElementById('todayRate');
     const pendingCount = document.getElementById('pendingCount');
     const serverTime = document.getElementById('summaryServerTime');
+    const gradeStatsList = document.getElementById('gradeStatsList');
+    const charts = {};
+    const chartColors = {
+      primary: '#198754',
+      primarySoft: 'rgba(25, 135, 84, 0.16)',
+      blue: '#0d6efd',
+      amber: '#f0ad4e',
+      red: '#dc3545',
+      gray: '#adb5bd',
+      teal: '#20c997',
+    };
+
+    function renderChart(key, elementId, config) {
+      const canvas = document.getElementById(elementId);
+
+      if (!canvas) {
+        return;
+      }
+
+      if (typeof window.Chart === 'undefined') {
+        canvas.parentElement.innerHTML = '<div class="dashboard-chart-fallback">그래프 모듈을 불러오지 못했습니다.</div>';
+        return;
+      }
+
+      if (charts[key]) {
+        charts[key].data = config.data;
+        charts[key].options = config.options;
+        charts[key].update();
+        return;
+      }
+
+      charts[key] = new window.Chart(canvas, config);
+    }
+
+    function commonScales(percent = false) {
+      return {
+        x: {
+          grid: { display: false },
+          ticks: { color: '#68776f', maxRotation: 0 },
+        },
+        y: {
+          beginAtZero: true,
+          suggestedMax: percent ? 100 : undefined,
+          max: percent ? 100 : undefined,
+          grid: { color: 'rgba(104, 119, 111, 0.12)' },
+          ticks: {
+            color: '#68776f',
+            callback: percent ? (value) => `${value}%` : undefined,
+            precision: percent ? undefined : 0,
+          },
+        },
+      };
+    }
+
+    function renderStatistics(result) {
+      const dailyTrend = Array.isArray(result.daily_trend) ? result.daily_trend : [];
+      const gradeStats = Array.isArray(result.grade_stats) ? result.grade_stats : [];
+      const locationStats = Array.isArray(result.location_stats) ? result.location_stats : [];
+      const hourlyStats = Array.isArray(result.hourly_stats) ? result.hourly_stats : [];
+
+      renderChart('daily', 'dailyTrendChart', {
+        type: 'line',
+        data: {
+          labels: dailyTrend.map((item) => item.date.slice(5).replace('-', '/')),
+          datasets: [{
+            label: '출석',
+            data: dailyTrend.map((item) => Number(item.count || 0)),
+            borderColor: chartColors.primary,
+            backgroundColor: chartColors.primarySoft,
+            borderWidth: 2,
+            pointRadius: 3,
+            pointHoverRadius: 5,
+            fill: true,
+            tension: 0.3,
+          }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: commonScales(),
+        },
+      });
+
+      renderChart('grade', 'gradeRateChart', {
+        type: 'bar',
+        data: {
+          labels: gradeStats.map((item) => `${item.grade}학년`),
+          datasets: [{
+            label: '오늘 출석률',
+            data: gradeStats.map((item) => Number(item.today_rate || 0)),
+            backgroundColor: [chartColors.primary, chartColors.blue, chartColors.teal, chartColors.amber],
+            borderRadius: 7,
+          }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: (context) => ` ${context.raw}%`,
+              },
+            },
+          },
+          scales: commonScales(true),
+        },
+      });
+
+      if (gradeStatsList) {
+        gradeStatsList.innerHTML = gradeStats.length
+          ? gradeStats.map((item) => `
+              <div>
+                <strong>${Number(item.grade)}학년</strong>
+                <span>${Number(item.today_count || 0)} / ${Number(item.student_count || 0)}명</span>
+                <b>${Number(item.today_rate || 0).toFixed(1)}%</b>
+              </div>
+            `).join('')
+          : '<p class="text-secondary mb-0">학년별 데이터가 없습니다.</p>';
+      }
+
+      const locationLabels = {
+        verified: '인증 완료',
+        approved: '관리자 승인',
+        pending: '승인 대기',
+        rejected: '반려',
+        unchecked: '미검사',
+      };
+      const locationColors = {
+        verified: chartColors.primary,
+        approved: chartColors.blue,
+        pending: chartColors.amber,
+        rejected: chartColors.red,
+        unchecked: chartColors.gray,
+      };
+
+      renderChart('location', 'locationStatusChart', {
+        type: 'doughnut',
+        data: {
+          labels: locationStats.map((item) => locationLabels[item.status] || item.status),
+          datasets: [{
+            data: locationStats.map((item) => Number(item.count || 0)),
+            backgroundColor: locationStats.map((item) => locationColors[item.status] || chartColors.gray),
+            borderColor: '#ffffff',
+            borderWidth: 3,
+          }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          cutout: '62%',
+          plugins: {
+            legend: {
+              position: 'bottom',
+              labels: { usePointStyle: true, boxWidth: 8 },
+            },
+          },
+        },
+      });
+
+      renderChart('hourly', 'hourlyChart', {
+        type: 'bar',
+        data: {
+          labels: hourlyStats.map((item) => `${String(item.hour).padStart(2, '0')}시`),
+          datasets: [{
+            label: '출석',
+            data: hourlyStats.map((item) => Number(item.count || 0)),
+            backgroundColor: chartColors.primarySoft,
+            borderColor: chartColors.primary,
+            borderWidth: 1,
+            borderRadius: 5,
+          }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: commonScales(),
+        },
+      });
+    }
 
     async function loadSummary(showError = true) {
       try {
@@ -345,9 +529,16 @@
         const result = data.result || {};
         todayCount.textContent = `${Number(result.today || 0)}건`;
         totalCount.textContent = `${Number(result.total || 0)}건`;
+        if (studentCount) {
+          studentCount.textContent = `${Number(result.student_count || 0)}명`;
+        }
+        if (todayRate) {
+          todayRate.textContent = `${Number(result.today_rate || 0).toFixed(1)}%`;
+        }
         if (pendingCount) {
           pendingCount.textContent = `${Number(result.pending || 0)}건`;
         }
+        renderStatistics(result);
 
         if (result.server_time) {
           syncSummaryServerTime(result.server_time, serverTime);
@@ -1752,6 +1943,8 @@
     const updateProgressFill = document.getElementById('updateProgressFill');
     const updateProgressSteps = document.getElementById('updateProgressSteps');
     const serverInfoList = document.getElementById('serverInfoList');
+    const adminSessionList = document.getElementById('adminSessionList');
+    const revokeOtherSessionsButton = document.getElementById('revokeOtherSessionsButton');
     const progressStages = ['다운로드 중', '백업 중', '설치 중', '적용 중', '마무리 하는 중'];
     let releasesCache = [];
     let progressTimer = null;
@@ -1823,6 +2016,37 @@
         resetButton.innerHTML = '<i class="bi bi-exclamation-triangle me-1"></i> 초기화 실행';
       }
     });
+
+    if (revokeOtherSessionsButton) {
+      revokeOtherSessionsButton.addEventListener('click', async () => {
+        if (!await confirmAction('현재 기기를 제외한 모든 로그인 세션을 종료할까요?', {
+          title: '다른 세션 모두 종료',
+          confirmText: '모두 종료',
+          confirmClass: 'btn-danger',
+        })) {
+          return;
+        }
+
+        revokeOtherSessionsButton.disabled = true;
+
+        try {
+          const data = await api('/api/admin-sessions.php', { type: 'revoke_others' });
+          if (!data) return;
+
+          if (data.status !== 1) {
+            showAlert(data.msg || '세션 종료에 실패했습니다.');
+            return;
+          }
+
+          toast(`${Number(data.result?.revoked_count || 0)}개 세션을 종료했습니다.`);
+          loadSessions();
+        } catch (error) {
+          showAlert('세션 종료 중 오류가 발생했습니다.');
+        } finally {
+          revokeOtherSessionsButton.disabled = false;
+        }
+      });
+    }
 
     updateCheckButton.addEventListener('click', () => loadUpdateInfo(true));
     closeReleaseDetailButton.addEventListener('click', closeReleaseDetail);
@@ -1970,6 +2194,99 @@
           serverInfoList.innerHTML = '<p class="text-secondary mb-0">서버 정보를 불러오지 못했습니다.</p>';
         }
       }
+    }
+
+    async function loadSessions() {
+      if (!adminSessionList) {
+        return;
+      }
+
+      try {
+        const data = await api('/api/admin-sessions.php', { type: 'list' });
+        if (!data) return;
+
+        if (data.status !== 1) {
+          adminSessionList.innerHTML = '<p class="text-secondary mb-0">로그인 세션을 불러오지 못했습니다.</p>';
+          return;
+        }
+
+        renderSessions(Array.isArray(data.result?.sessions) ? data.result.sessions : []);
+      } catch (error) {
+        adminSessionList.innerHTML = '<p class="text-secondary mb-0">로그인 세션을 불러오지 못했습니다.</p>';
+      }
+    }
+
+    function renderSessions(sessions) {
+      if (!sessions.length) {
+        adminSessionList.innerHTML = '<p class="text-secondary mb-0">활성 로그인 세션이 없습니다.</p>';
+        return;
+      }
+
+      adminSessionList.innerHTML = sessions.map((session) => `
+        <article class="session-item ${session.is_current ? 'is-current' : ''}">
+          <div class="session-item-icon"><i class="bi ${session.is_current ? 'bi-laptop-fill' : 'bi-laptop'}"></i></div>
+          <div class="session-item-body">
+            <div class="session-item-title">
+              <strong>${escapeHtml(session.ip_address || '알 수 없음')}</strong>
+              ${session.is_current ? '<span class="badge text-bg-success">현재 세션</span>' : ''}
+            </div>
+            <span class="session-user-agent" title="${escapeHtml(session.user_agent || '')}">${escapeHtml(session.user_agent || '알 수 없음')}</span>
+            <dl class="session-meta">
+              <div><dt>로그인</dt><dd>${escapeHtml(formatDateTimeText(session.created_at))}</dd></div>
+              <div><dt>최근 활동</dt><dd>${escapeHtml(formatDateTimeText(session.last_seen_at))}</dd></div>
+              <div><dt>만료</dt><dd>${escapeHtml(formatDateTimeText(session.expired_at))}</dd></div>
+            </dl>
+          </div>
+          <button class="btn btn-sm btn-outline-danger" type="button" data-revoke-session="${Number(session.id)}">
+            강제 로그아웃
+          </button>
+        </article>
+      `).join('');
+
+      adminSessionList.querySelectorAll('[data-revoke-session]').forEach((button) => {
+        button.addEventListener('click', async () => {
+          const sessionId = Number(button.dataset.revokeSession);
+          const session = sessions.find((item) => Number(item.id) === sessionId);
+          const message = session?.is_current
+            ? '현재 세션을 종료하면 즉시 로그인 화면으로 이동합니다. 계속할까요?'
+            : '선택한 로그인 세션을 강제로 종료할까요?';
+
+          if (!await confirmAction(message, {
+            title: '세션 강제 로그아웃',
+            confirmText: '로그아웃',
+            confirmClass: 'btn-danger',
+          })) {
+            return;
+          }
+
+          button.disabled = true;
+
+          try {
+            const data = await api('/api/admin-sessions.php', {
+              type: 'revoke',
+              session_id: sessionId,
+            });
+            if (!data) return;
+
+            if (data.status !== 1) {
+              showAlert(data.msg || '세션 종료에 실패했습니다.');
+              button.disabled = false;
+              return;
+            }
+
+            if (data.result?.revoked_current) {
+              redirectLogin('session-revoked');
+              return;
+            }
+
+            toast('선택한 세션을 종료했습니다.');
+            loadSessions();
+          } catch (error) {
+            button.disabled = false;
+            showAlert('세션 종료 중 오류가 발생했습니다.');
+          }
+        });
+      });
     }
 
     async function loadUpdateInfo(showSuccess) {
@@ -2215,6 +2532,7 @@
 
     loadUpdateInfo(false);
     loadServerInfo();
+    loadSessions();
   }
 
   function initPassword() {
