@@ -9,73 +9,15 @@
   const closeForgotPasswordButton = document.getElementById('closeForgotPasswordButton');
   const passwordResetCommand = document.getElementById('passwordResetCommand');
   const copyPasswordResetCommandButton = document.getElementById('copyPasswordResetCommandButton');
+  const { api, initPasswordToggles, toast } = window.PublicUtils;
   let isRedirecting = false;
+
+  initPasswordToggles(document);
 
   try {
     localStorage.removeItem('admin_token');
   } catch (error) {
     // 기존 버전의 중복 토큰 정리 실패가 로그인 화면 실행을 막지 않도록 합니다.
-  }
-
-  function toast(message, type = 'success') {
-    if (window.Toastify) {
-      window.Toastify({
-        text: message,
-        duration: 2400,
-        gravity: 'top',
-        position: 'center',
-        style: {
-          background: type === 'error' ? '#c2410c' : '#10805f',
-          borderRadius: '8px',
-        },
-      }).showToast();
-      return;
-    }
-
-    const root = document.getElementById('toastRoot');
-    const item = document.createElement('div');
-    item.className = `fallback-toast ${type}`;
-    item.textContent = message;
-    root.appendChild(item);
-    setTimeout(() => item.remove(), 2400);
-  }
-
-  document.querySelectorAll('[data-password-toggle]').forEach((toggleButton) => {
-    toggleButton.addEventListener('click', () => {
-      const input = document.getElementById(toggleButton.dataset.passwordToggle || '');
-      const icon = toggleButton.querySelector('i');
-
-      if (!input) {
-        return;
-      }
-
-      const visible = input.type === 'text';
-      input.type = visible ? 'password' : 'text';
-      toggleButton.setAttribute('aria-label', visible ? '비밀번호 표시' : '비밀번호 숨기기');
-
-      if (icon) {
-        icon.className = visible ? 'bi bi-eye' : 'bi bi-eye-slash';
-      }
-    });
-  });
-
-  async function api(url, options = {}) {
-    const response = await fetch(url, {
-      credentials: 'same-origin',
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(options.headers || {}),
-      },
-    });
-
-    const data = await response.json().catch(() => null);
-
-    if (!data) {
-      throw new Error('서버 응답을 읽을 수 없습니다.');
-    }
-
-    return data;
   }
 
   async function loadStatus() {

@@ -69,8 +69,7 @@ try {
         "SELECT
             substr(student_no, 1, 1) AS grade,
             COUNT(DISTINCT student_no) AS student_count,
-            COUNT(DISTINCT CASE WHEN attend_date = :today THEN student_no END) AS today_count,
-            COUNT(*) AS attendance_count
+            COUNT(DISTINCT CASE WHEN attend_date = :today THEN student_no END) AS today_count
          FROM attendance
          WHERE location_status IN {$countedStatuses}
            AND substr(student_no, 1, 1) BETWEEN '1' AND '9'
@@ -86,7 +85,6 @@ try {
             'grade' => (int) $row['grade'],
             'student_count' => $students,
             'today_count' => $todayStudents,
-            'attendance_count' => (int) $row['attendance_count'],
             'today_rate' => $students > 0 ? round($todayStudents / $students * 100, 1) : 0.0,
         ];
     }, $gradeStatement->fetchAll());

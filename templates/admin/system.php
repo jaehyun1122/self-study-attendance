@@ -66,10 +66,9 @@
       <div class="session-card-actions">
         <p class="form-text mb-0">
           최근 세션 <strong id="adminSessionCount">-</strong>
-          <span class="d-block">항목을 누르면 접속 정보와 관리 기능을 볼 수 있습니다.</span>
         </p>
         <button class="btn btn-sm btn-outline-danger" id="revokeOtherSessionsButton" type="button">
-          다른 세션 모두 종료
+          현재 세션만 유지
         </button>
       </div>
 

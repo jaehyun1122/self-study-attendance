@@ -132,7 +132,7 @@ try {
         }
 
         $duplicate = $app->pdo()->prepare(
-            'SELECT created_at, location_status, location_approved_at FROM attendance WHERE student_no = :student_no AND attend_date = :attend_date'
+            'SELECT created_at, location_status FROM attendance WHERE student_no = :student_no AND attend_date = :attend_date'
         );
         $duplicate->execute([
             ':student_no' => $studentNo,

@@ -5,7 +5,6 @@ declare(strict_types=1);
 use App\Controller;
 
 if (PHP_SAPI !== 'cli') {
-    http_response_code(404);
     exit;
 }
 

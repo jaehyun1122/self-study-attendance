@@ -47,7 +47,6 @@ try {
 
         $app->success('로그인 세션을 불러왔습니다.', [
             'total' => $total,
-            'shown' => count($sessions),
             'sessions' => $sessions,
         ]);
     }
@@ -78,7 +77,6 @@ try {
         }
 
         $app->success('선택한 세션에서 로그아웃했습니다.', [
-            'revoked_id' => (int) $sessionId,
             'revoked_current' => $isCurrent,
         ]);
     }

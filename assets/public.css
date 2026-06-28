@@ -25,6 +25,16 @@
   box-shadow: var(--app-shadow);
 }
 
+:root[data-theme="dark"] .attendance-panel,
+:root[data-theme="dark"] .student-edit-dialog {
+  background: rgba(23, 34, 28, 0.97);
+  color: var(--app-text);
+}
+
+:root[data-theme="dark"] #locationConfirmMessage {
+  color: var(--app-text);
+}
+
 .attendance-panel-header {
   display: grid;
   gap: 14px;

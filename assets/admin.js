@@ -13,6 +13,7 @@
     meterText,
     nullableNumber,
     parseServerTime,
+    toast,
     toDateTimeLocal,
     valueOrDash,
     validateLength,
@@ -25,31 +26,6 @@
     localStorage.removeItem('admin_token');
   } catch (error) {
     // 기존 버전의 중복 토큰 정리 실패가 관리자 화면 실행을 막지 않도록 합니다.
-  }
-
-  function toast(message, type = 'success') {
-    if (window.Toastify) {
-      window.Toastify({
-        text: message,
-        duration: 2400,
-        gravity: 'top',
-        position: 'center',
-        style: {
-          background: type === 'error' ? '#dc3545' : '#198754',
-          borderRadius: '8px',
-        },
-      }).showToast();
-      return;
-    }
-
-    const root = document.getElementById('toastRoot');
-    if (!root) return;
-
-    const item = document.createElement('div');
-    item.className = `fallback-toast ${type}`;
-    item.textContent = message;
-    root.appendChild(item);
-    setTimeout(() => item.remove(), 2400);
   }
 
   function ensureAdminDialog() {
@@ -1976,6 +1952,8 @@
     let serverInfoUptimeSeconds = null;
     let serverInfoClockTimer = null;
     let serverInfoRequestPending = false;
+    let sessionsRequestPending = false;
+    let sessionsSignature = null;
     let updateNoticeShown = false;
 
     if (!resetForm || !updateCheckButton) {
@@ -2041,9 +2019,9 @@
 
     if (revokeOtherSessionsButton) {
       revokeOtherSessionsButton.addEventListener('click', async () => {
-        if (!await confirmAction('현재 기기를 제외한 모든 로그인 세션을 종료할까요?', {
-          title: '다른 세션 모두 종료',
-          confirmText: '모두 종료',
+        if (!await confirmAction('현재 로그인한 세션만 남기고 나머지 세션을 모두 종료할까요?', {
+          title: '현재 세션만 유지',
+          confirmText: '다른 세션 종료',
           confirmClass: 'btn-danger',
         })) {
           return;
@@ -2060,7 +2038,7 @@
             return;
           }
 
-          toast(`${Number(data.result?.revoked_count || 0)}개 세션을 종료했습니다.`);
+          toast(`${Number(data.result?.revoked_count || 0)}개의 다른 세션을 종료했습니다.`);
           loadSessions();
         } catch (error) {
           showAlert('세션 종료 중 오류가 발생했습니다.');
@@ -2121,11 +2099,12 @@
         updatePasswordInput.value = '';
         const installedVersion = data.result?.installed_version || tag;
         const backupPath = data.result?.backup_path || '-';
+        const integrityLine = data.result?.checksum_verified ? '\n무결성: SHA-256 체크섬 검증 완료' : '';
         currentVersionText.textContent = installedVersion;
         await wait(500);
         await openAdminDialog({
           title: '업데이트 완료',
-          message: `${installedVersion} 업데이트 완료\n백업경로: ${backupPath}\n\n변경 사항 적용을 위해 F5(새로고침)를 눌러주세요.`,
+          message: `${installedVersion} 업데이트 완료${integrityLine}\n백업경로: ${backupPath}\n\n변경 사항 적용을 위해 F5(새로고침)를 눌러주세요.`,
           confirmText: '확인',
           confirmClass: 'btn-success',
           type: 'info',
@@ -2175,11 +2154,12 @@
         repairPasswordInput.value = '';
         const installedVersion = data.result?.installed_version || currentVersion || '-';
         const backupPath = data.result?.backup_path || '-';
+        const integrityLine = data.result?.checksum_verified ? '\n무결성: SHA-256 체크섬 검증 완료' : '';
         currentVersionText.textContent = installedVersion;
         await wait(500);
         await openAdminDialog({
           title: '재설치 완료',
-          message: `${installedVersion} 재설치 완료\n백업경로: ${backupPath}\n\n변경 사항 적용을 위해 F5(새로고침)를 눌러주세요.`,
+          message: `${installedVersion} 재설치 완료${integrityLine}\n백업경로: ${backupPath}\n\n변경 사항 적용을 위해 F5(새로고침)를 눌러주세요.`,
           confirmText: '확인',
           confirmClass: 'btn-success',
           type: 'info',
@@ -2223,9 +2203,11 @@
     }
 
     async function loadSessions() {
-      if (!adminSessionList) {
+      if (!adminSessionList || sessionsRequestPending) {
         return;
       }
+
+      sessionsRequestPending = true;
 
       try {
         const data = await api('/api/admin-sessions.php', { type: 'list' });
@@ -2233,6 +2215,7 @@
 
         if (data.status !== 1) {
           adminSessionList.innerHTML = '<p class="text-secondary mb-0">로그인 세션을 불러오지 못했습니다.</p>';
+          sessionsSignature = null;
           return;
         }
 
@@ -2241,10 +2224,18 @@
         adminSessionCount.textContent = total > sessions.length
           ? `${total}개 (최근 ${sessions.length}개 표시)`
           : `${total}개`;
-        renderSessions(sessions);
+        const nextSignature = JSON.stringify(sessions);
+
+        if (nextSignature !== sessionsSignature) {
+          renderSessions(sessions);
+          sessionsSignature = nextSignature;
+        }
       } catch (error) {
         adminSessionCount.textContent = '-';
         adminSessionList.innerHTML = '<p class="text-secondary mb-0">로그인 세션을 불러오지 못했습니다.</p>';
+        sessionsSignature = null;
+      } finally {
+        sessionsRequestPending = false;
       }
     }
 
@@ -2261,23 +2252,35 @@
     }
 
     function renderSessions(sessions) {
+      const openSessionIds = new Set(
+        Array.from(adminSessionList.querySelectorAll('.session-item[open]'))
+          .map((item) => item.dataset.sessionId)
+      );
+      const previousScrollTop = adminSessionList.scrollTop;
+
       if (!sessions.length) {
         adminSessionList.innerHTML = '<p class="text-secondary mb-0">활성 로그인 세션이 없습니다.</p>';
         return;
       }
 
       adminSessionList.innerHTML = sessions.map((session) => `
-        <details class="session-item ${session.is_current ? 'is-current' : ''}">
+        <details class="session-item ${session.is_current ? 'is-current' : ''}" data-session-id="${Number(session.id)}">
           <summary class="session-summary">
-            <span class="session-item-title">
+            <span class="session-device-icon">
               <i class="bi bi-laptop" aria-hidden="true"></i>
-              <span>
-                <strong>${escapeHtml(sessionClientText(session.user_agent))}</strong>
-                <small>${escapeHtml(session.ip_address || '알 수 없음')}</small>
-              </span>
-              ${session.is_current ? '<span class="badge text-bg-success">현재 세션</span>' : ''}
             </span>
-            <time>${escapeHtml(formatDateTimeText(session.last_seen_at))}</time>
+            <span class="session-summary-main">
+              <span class="session-summary-heading">
+                <strong title="${escapeHtml(sessionClientText(session.user_agent))}">${escapeHtml(sessionClientText(session.user_agent))}</strong>
+                ${session.is_current ? '<span class="badge text-bg-success">현재 세션</span>' : ''}
+              </span>
+              <small>${escapeHtml(session.ip_address || '알 수 없음')}</small>
+            </span>
+            <span class="session-summary-time">
+              <small>최근 활동</small>
+              <time>${escapeHtml(formatDateTimeText(session.last_seen_at))}</time>
+            </span>
+            <i class="bi bi-chevron-down session-detail-toggle-icon" aria-hidden="true"></i>
           </summary>
           <div class="session-details">
             <dl class="session-meta">
@@ -2285,7 +2288,10 @@
               <div><dt>최근 활동</dt><dd>${escapeHtml(formatDateTimeText(session.last_seen_at))}</dd></div>
               <div><dt>만료</dt><dd>${escapeHtml(formatDateTimeText(session.expired_at))}</dd></div>
             </dl>
-            <span class="session-user-agent">${escapeHtml(session.user_agent || '알 수 없음')}</span>
+            <div class="session-user-agent">
+              <strong><i class="bi bi-browser-chrome" aria-hidden="true"></i> 유저 에이전트</strong>
+              <code>${escapeHtml(session.user_agent || '알 수 없음')}</code>
+            </div>
             <div class="session-detail-actions">
               <button class="btn btn-sm btn-outline-danger" type="button" data-revoke-session="${Number(session.id)}">
                 이 세션 로그아웃
@@ -2294,6 +2300,14 @@
           </div>
         </details>
       `).join('');
+
+      openSessionIds.forEach((sessionId) => {
+        const item = adminSessionList.querySelector(`[data-session-id="${Number(sessionId)}"]`);
+        if (item) {
+          item.open = true;
+        }
+      });
+      adminSessionList.scrollTop = previousScrollTop;
 
       adminSessionList.querySelectorAll('[data-revoke-session]').forEach((button) => {
         button.addEventListener('click', async () => {
@@ -2344,13 +2358,21 @@
     async function loadUpdateInfo(showSuccess) {
       updateCheckButton.disabled = true;
       updateCheckButton.textContent = '확인 중...';
-      latestVersionText.textContent = '릴리즈 정보를 가져오는 중입니다.';
+      latestVersionText.textContent = '업데이트 정보를 불러오는 중입니다.';
+      releaseList.innerHTML = `
+        <div class="empty-table-state">
+          <div class="loading-spinner" aria-hidden="true"></div>
+          <strong>업데이트 정보를 불러오는 중입니다.</strong>
+        </div>
+      `;
 
       try {
         const data = await api('/api/admin-system.php', { type: 'update_check' });
         if (!data) return;
 
         if (data.status !== 1) {
+          latestVersionText.textContent = '업데이트 정보를 확인할 수 없습니다.';
+          releaseList.innerHTML = '<p class="text-secondary mb-0">업데이트 정보를 불러오지 못했습니다.</p>';
           showAlert(data.msg || '릴리즈 정보를 확인할 수 없습니다.');
           return;
         }
@@ -2366,7 +2388,8 @@
           toast('현재 최신 버전입니다.');
         }
       } catch (error) {
-        latestVersionText.textContent = '릴리즈 정보를 확인할 수 없습니다.';
+        latestVersionText.textContent = '업데이트 정보를 확인할 수 없습니다.';
+        releaseList.innerHTML = '<p class="text-secondary mb-0">업데이트 정보를 불러오지 못했습니다.</p>';
         showAlert('업데이트 확인 중 오류가 발생했습니다.');
       } finally {
         updateCheckButton.disabled = false;
@@ -2414,7 +2437,7 @@
           <button class="release-item release-item-button" type="button" data-release-index="${index}">
             <strong>${escapeHtml(release.tag_name)}</strong>
             <span>${escapeHtml(release.name || release.tag_name)}</span>
-            <small>${escapeHtml(release.published_at_text || formatReleaseDate(release.published_at) || '태그')}</small>
+            <small>${escapeHtml(release.published_at_text || '태그')}</small>
           </button>
         `).join('')}
       `;
@@ -2430,29 +2453,12 @@
 
     }
 
-    function formatReleaseDate(value) {
-      const date = new Date(value || '');
-
-      if (Number.isNaN(date.getTime())) {
-        return '';
-      }
-
-      return [
-        date.getFullYear(),
-        String(date.getMonth() + 1).padStart(2, '0'),
-        String(date.getDate()).padStart(2, '0'),
-      ].join('-') + ' ' + [
-        String(date.getHours()).padStart(2, '0'),
-        String(date.getMinutes()).padStart(2, '0'),
-        String(date.getSeconds()).padStart(2, '0'),
-      ].join(':');
-    }
-
     function openReleaseDetail(release) {
       releaseDetailTitle.textContent = release.tag_name || '릴리즈 정보';
       releaseDetailMeta.innerHTML = `
         <span>${escapeHtml(release.name || release.tag_name || '-')}</span>
-        <span>${escapeHtml(release.published_at_text || formatReleaseDate(release.published_at) || '날짜 없음')}</span>
+        <span>${escapeHtml(release.published_at_text || '날짜 없음')}</span>
+        <span>${release.checksum_available ? 'SHA-256 체크섬 제공' : '체크섬 미제공'}</span>
         ${release.prerelease ? '<span>Pre-release</span>' : ''}
       `;
       releaseDetailBody.textContent = (release.body || '').trim() || '릴리즈 상세 내용이 없습니다.';
@@ -2574,6 +2580,8 @@
     loadUpdateInfo(false);
     loadServerInfo();
     loadSessions();
+    setInterval(loadServerInfo, 5000);
+    setInterval(loadSessions, 5000);
   }
 
   function initPassword() {

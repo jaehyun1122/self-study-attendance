@@ -7,6 +7,12 @@ use App\Controller;
 require_once __DIR__ . '/../App/Controller.php';
 
 $app = new Controller();
+
+if (!$app->checkInstalled()) {
+    $app->clearAdminCookie();
+    $app->redirect('/install.php');
+}
+
 $token = $_COOKIE['admin_token'] ?? null;
 $reason = trim((string) ($_GET['reason'] ?? ''));
 

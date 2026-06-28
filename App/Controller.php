@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App;
 
 use PDO;
+use PDOException;
 use Throwable;
 
 require_once __DIR__ . '/Database.php';
@@ -13,7 +14,7 @@ final class Controller
 {
     public const STATUS_SUCCESS = 1;
     public const STATUS_ERROR = 2;
-    private const SCHEMA_VERSION = 10903;
+    private const SCHEMA_VERSION = 10904;
 
     /** @var array<string, mixed> */
     private array $config;
@@ -192,7 +193,7 @@ final class Controller
     }
 
     /**
-     * @return array{enabled: bool, configured: bool, timeout_seconds: ?int}
+     * @return array{enabled: bool, timeout_seconds: ?int}
      */
     public function publicLocationStatus(): array
     {
@@ -200,7 +201,6 @@ final class Controller
 
         return [
             'enabled' => $settings['enabled'],
-            'configured' => $settings['configured'],
             'timeout_seconds' => $settings['timeout_seconds'],
         ];
     }
@@ -423,10 +423,6 @@ final class Controller
         if ($actualMethod !== $expectedMethod) {
             $this->error('허용되지 않은 요청 방식입니다.', 405);
         }
-
-        if ($expectedMethod !== 'GET' && strtolower($this->serverHeaderValue('Sec-Fetch-Site')) === 'cross-site') {
-            $this->error('교차 사이트 요청은 허용하지 않습니다.', 403);
-        }
     }
 
     /**
@@ -554,6 +550,12 @@ final class Controller
     public function requireAdminPage(): string
     {
         header('Cache-Control: no-store, private');
+
+        if (!$this->checkInstalled()) {
+            $this->clearAdminCookie();
+            $this->redirect('/install.php');
+        }
+
         $cookieName = 'admin_token';
         $token = $_COOKIE[$cookieName] ?? null;
 
@@ -760,6 +762,18 @@ final class Controller
         $this->error($message, 500, ['error_id' => $errorId]);
     }
 
+    public function isIgnorableSchemaConflict(Throwable $exception): bool
+    {
+        if (!$exception instanceof PDOException) {
+            return false;
+        }
+
+        $message = strtolower($exception->getMessage());
+
+        return str_contains($message, 'duplicate column name')
+            || str_contains($message, 'already exists');
+    }
+
     public function clientIpAddress(): string
     {
         $remoteAddress = trim((string) ($_SERVER['REMOTE_ADDR'] ?? ''));
@@ -919,12 +933,19 @@ final class Controller
                     }
                 }
 
-                $addColumn = static function (string $name, string $definition) use ($pdo, &$columns): void {
+                $addColumn = function (string $name, string $definition) use ($pdo, &$columns): void {
                     if (isset($columns[$name])) {
                         return;
                     }
 
-                    $pdo->exec("ALTER TABLE attendance ADD COLUMN {$definition}");
+                    try {
+                        $pdo->exec("ALTER TABLE attendance ADD COLUMN {$definition}");
+                    } catch (PDOException $exception) {
+                        if (!$this->isIgnorableSchemaConflict($exception)) {
+                            throw $exception;
+                        }
+                    }
+
                     $columns[$name] = true;
                 };
 

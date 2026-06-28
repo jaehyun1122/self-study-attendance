@@ -12,7 +12,6 @@ $app->requireMethod('GET');
 $installed = $app->checkInstalled();
 $location = $installed ? $app->publicLocationStatus() : [
     'enabled' => false,
-    'configured' => false,
     'timeout_seconds' => null,
 ];
 

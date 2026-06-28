@@ -21,9 +21,14 @@
         <img class="brand-logo" src="<?php echo $h($asset('/assets/logo.png')); ?>" width="24" height="24" alt="" aria-hidden="true">
         <span><?php echo $h($app->string('app_name')); ?></span>
       </a>
-      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#adminNavbar" aria-controls="adminNavbar" aria-expanded="false" aria-label="메뉴 열기">
-        <span class="navbar-toggler-icon"></span>
-      </button>
+      <div class="admin-mobile-actions">
+        <button class="theme-toggle-button" type="button" data-theme-toggle aria-label="다크 모드로 전환" title="다크 모드로 전환">
+          <i class="bi bi-moon-stars"></i>
+        </button>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#adminNavbar" aria-controls="adminNavbar" aria-expanded="false" aria-label="메뉴 열기">
+          <span class="navbar-toggler-icon"></span>
+        </button>
+      </div>
       <div class="collapse navbar-collapse" id="adminNavbar">
         <ul class="navbar-nav me-auto mb-2 mb-lg-0">
           <?php foreach ($menu as $item): ?>
@@ -64,6 +69,9 @@
         </nav>
       </div>
       <div class="admin-sidebar-footer">
+        <button class="theme-toggle-button" type="button" data-theme-toggle aria-label="다크 모드로 전환" title="다크 모드로 전환">
+          <i class="bi bi-moon-stars"></i>
+        </button>
         <div class="admin-developer-meta">
           <span>개발자: <a href="<?php echo $h($app->string('powered_by_url', $app->string('repository_url'))); ?>" target="_blank" rel="noopener noreferrer"><?php echo $h($app->string('developer_name', $app->string('powered_by'))); ?></a></span>
           <span>현재 버전 <?php echo $h($app->string('app_version')); ?></span>

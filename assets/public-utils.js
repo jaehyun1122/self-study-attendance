@@ -1,4 +1,6 @@
 (function () {
+  const THEME_STORAGE_KEY = 'attendance_color_theme';
+
   function toast(message, type = 'success') {
     if (window.Toastify) {
       window.Toastify({
@@ -107,6 +109,51 @@
     });
   }
 
+  function applyTheme(theme) {
+    const normalizedTheme = theme === 'dark' ? 'dark' : 'light';
+    document.documentElement.dataset.theme = normalizedTheme;
+    document.querySelectorAll('[data-theme-toggle]').forEach((button) => {
+      const dark = normalizedTheme === 'dark';
+      const icon = button.querySelector('i');
+      const label = dark ? '라이트 모드로 전환' : '다크 모드로 전환';
+
+      button.setAttribute('aria-label', label);
+      button.setAttribute('title', label);
+      if (icon) {
+        icon.className = dark ? 'bi bi-sun' : 'bi bi-moon-stars';
+      }
+    });
+  }
+
+  function initThemeToggles(root = document) {
+    let savedTheme = '';
+
+    try {
+      savedTheme = localStorage.getItem(THEME_STORAGE_KEY) || '';
+    } catch (error) {
+      savedTheme = '';
+    }
+
+    const preferredTheme = savedTheme === 'dark' || savedTheme === 'light'
+      ? savedTheme
+      : (window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    applyTheme(preferredTheme);
+
+    root.querySelectorAll('[data-theme-toggle]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const nextTheme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+
+        try {
+          localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
+        } catch (error) {
+          // 저장할 수 없는 환경에서도 현재 페이지의 테마 변경은 유지합니다.
+        }
+
+        applyTheme(nextTheme);
+      });
+    });
+  }
+
   function parseServerTime(value) {
     const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/);
 
@@ -207,6 +254,7 @@
     formatUptimeSeconds,
     fromDateTimeLocal,
     initPasswordToggles,
+    initThemeToggles,
     inputRange,
     meterText,
     nullableNumber,
@@ -216,4 +264,6 @@
     valueOrDash,
     validateLength,
   };
+
+  initThemeToggles(document);
 })();

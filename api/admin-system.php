@@ -25,15 +25,14 @@ try {
             $app->error('지원하지 않는 초기화 범위입니다.', 400);
         }
 
-        $result = resetSystemData($app, $scope);
+        resetSystemData($app, $scope);
 
         if ($scope === 'all') {
             $app->clearAdminCookie();
         }
 
         $app->success(
-            $scope === 'all' ? '모든 데이터가 초기화되었습니다. 초기 설치를 다시 진행해주세요.' : '출석 기록이 초기화되었습니다.',
-            $result
+            $scope === 'all' ? '모든 데이터가 초기화되었습니다. 초기 설치를 다시 진행해주세요.' : '출석 기록이 초기화되었습니다.'
         );
     }
 
@@ -46,10 +45,11 @@ try {
             'body' => (string) ($release['body'] ?? ''),
             'prerelease' => (bool) ($release['prerelease'] ?? false),
             'is_newer' => (bool) ($release['is_newer'] ?? false),
+            'checksum_available' => trim((string) ($release['zip_digest'] ?? '')) !== '',
         ];
         $releases = array_map($publicRelease, $releaseInfo['releases'] ?? []);
         $latest = is_array($releaseInfo['latest'] ?? null)
-            ? $publicRelease($releaseInfo['latest'])
+            ? ['tag_name' => (string) ($releaseInfo['latest']['tag_name'] ?? '')]
             : null;
 
         $app->success('릴리즈 정보를 확인했습니다.', [
@@ -105,19 +105,13 @@ try {
     $app->failWithException('시스템 작업 중 오류가 발생했습니다.', $exception);
 }
 
-/**
- * @return array{deleted_attendance: int, deleted_settings: int, deleted_tokens: int, deleted_admins: int}
- */
-function resetSystemData(Controller $app, string $scope): array
+function resetSystemData(Controller $app, string $scope): void
 {
     $pdo = $app->pdo();
     $pdo->beginTransaction();
 
     try {
-        $deletedAttendance = (int) $pdo->exec('DELETE FROM attendance');
-        $deletedSettings = 0;
-        $deletedTokens = 0;
-        $deletedAdmins = 0;
+        $pdo->exec('DELETE FROM attendance');
         $hasSequence = (int) $pdo
             ->query("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'sqlite_sequence'")
             ->fetchColumn();
@@ -127,10 +121,10 @@ function resetSystemData(Controller $app, string $scope): array
         }
 
         if ($scope === 'all') {
-            $deletedSettings = (int) $pdo->exec('DELETE FROM app_settings');
-            $deletedTokens = (int) $pdo->exec('DELETE FROM admin_tokens');
+            $pdo->exec('DELETE FROM app_settings');
+            $pdo->exec('DELETE FROM admin_tokens');
             $pdo->exec('DELETE FROM auth_rate_limits');
-            $deletedAdmins = (int) $pdo->exec('DELETE FROM admin');
+            $pdo->exec('DELETE FROM admin');
 
             if ($hasSequence > 0) {
                 $sequenceTables = ['attendance', 'admin', 'admin_tokens'];
@@ -141,13 +135,6 @@ function resetSystemData(Controller $app, string $scope): array
         }
 
         $pdo->commit();
-
-        return [
-            'deleted_attendance' => $deletedAttendance,
-            'deleted_settings' => $deletedSettings,
-            'deleted_tokens' => $deletedTokens,
-            'deleted_admins' => $deletedAdmins,
-        ];
     } catch (Throwable $exception) {
         $pdo->rollBack();
         throw $exception;
@@ -160,11 +147,6 @@ function resetSystemData(Controller $app, string $scope): array
 function githubReleaseInfo(Controller $app): array
 {
     [$owner, $repo] = configuredRepositoryParts($app);
-    $repository = [
-        'owner' => $owner,
-        'repo' => $repo,
-        'url' => "https://github.com/{$owner}/{$repo}",
-    ];
     $releases = [];
 
     try {
@@ -181,13 +163,14 @@ function githubReleaseInfo(Controller $app): array
                 continue;
             }
 
+            $packageAsset = releasePackageAsset($release, $owner, $repo, $tag);
             $releases[] = [
                 'tag_name' => $tag,
                 'name' => (string) ($release['name'] ?? $tag),
                 'published_at' => (string) ($release['published_at'] ?? ''),
                 'published_at_text' => releaseDateText((string) ($release['published_at'] ?? '')),
-                'html_url' => (string) ($release['html_url'] ?? "https://github.com/{$owner}/{$repo}/releases/tag/{$tag}"),
-                'zip_url' => archiveUrl($owner, $repo, $tag),
+                'zip_url' => $packageAsset['url'] ?? archiveUrl($owner, $repo, $tag),
+                'zip_digest' => $packageAsset['digest'] ?? '',
                 'body' => (string) ($release['body'] ?? ''),
                 'prerelease' => (bool) ($release['prerelease'] ?? false),
             ];
@@ -215,8 +198,8 @@ function githubReleaseInfo(Controller $app): array
                 'name' => $tag,
                 'published_at' => '',
                 'published_at_text' => '태그',
-                'html_url' => "https://github.com/{$owner}/{$repo}/releases/tag/{$tag}",
                 'zip_url' => archiveUrl($owner, $repo, $tag),
+                'zip_digest' => '',
                 'body' => '',
                 'prerelease' => false,
             ];
@@ -242,7 +225,6 @@ function githubReleaseInfo(Controller $app): array
     $latest = $releases[0] ?? null;
 
     return [
-        'repository' => $repository,
         'current_version' => $currentVersion,
         'latest' => $latest,
         'update_available' => $latest !== null && compareVersionLabel((string) $latest['tag_name'], $currentVersion) > 0,
@@ -314,6 +296,73 @@ function archiveUrl(string $owner, string $repo, string $tag): string
     $tagPath = implode('/', array_map('rawurlencode', explode('/', $tag)));
 
     return "https://github.com/{$owner}/{$repo}/archive/refs/tags/{$tagPath}.zip";
+}
+
+/**
+ * @param array<string, mixed> $release
+ * @return array{url: string, digest: string}|null
+ */
+function releasePackageAsset(array $release, string $owner, string $repo, string $tag): ?array
+{
+    $assets = is_array($release['assets'] ?? null) ? $release['assets'] : [];
+    $candidates = [];
+    $expectedNames = array_map('strtolower', [
+        "{$repo}-{$tag}.zip",
+        "{$repo}-" . ltrim($tag, 'vV') . '.zip',
+        "{$repo}.zip",
+    ]);
+
+    foreach ($assets as $asset) {
+        if (!is_array($asset) || strtolower((string) ($asset['state'] ?? '')) !== 'uploaded') {
+            continue;
+        }
+
+        $name = trim((string) ($asset['name'] ?? ''));
+        $url = trim((string) ($asset['browser_download_url'] ?? ''));
+        $digest = normalizeSha256Digest((string) ($asset['digest'] ?? ''));
+        $urlHost = strtolower((string) parse_url($url, PHP_URL_HOST));
+        $urlPath = strtolower((string) parse_url($url, PHP_URL_PATH));
+        $expectedPathPrefix = strtolower("/{$owner}/{$repo}/releases/download/");
+
+        if (
+            $name === ''
+            || !str_ends_with(strtolower($name), '.zip')
+            || $digest === ''
+            || $urlHost !== 'github.com'
+            || !str_starts_with($urlPath, $expectedPathPrefix)
+        ) {
+            continue;
+        }
+
+        $nameIndex = array_search(strtolower($name), $expectedNames, true);
+        $candidates[] = [
+            'url' => $url,
+            'digest' => $digest,
+            'name' => $name,
+            'priority' => $nameIndex === false ? count($expectedNames) : $nameIndex,
+        ];
+    }
+
+    if ($candidates === []) {
+        return null;
+    }
+
+    usort($candidates, static fn (array $first, array $second): int => $first['priority'] <=> $second['priority']);
+    $selected = $candidates[0];
+
+    return [
+        'url' => (string) $selected['url'],
+        'digest' => (string) $selected['digest'],
+    ];
+}
+
+function normalizeSha256Digest(string $digest): string
+{
+    $digest = strtolower(trim($digest));
+
+    return preg_match('/^sha256:([a-f0-9]{64})$/', $digest, $matches) === 1
+        ? $matches[1]
+        : '';
 }
 
 /**
@@ -433,12 +482,12 @@ function serverInfo(Controller $app): array
 {
     $uptimeSeconds = serverUptimeSeconds();
     $extensions = [
-        ['name' => 'pdo_sqlite', 'label' => 'SQLite DB', 'required' => true, 'loaded' => extension_loaded('pdo_sqlite')],
-        ['name' => 'zip', 'label' => '업데이트 압축 해제', 'required' => true, 'loaded' => class_exists('ZipArchive')],
-        ['name' => 'openssl', 'label' => 'HTTPS 다운로드', 'required' => true, 'loaded' => extension_loaded('openssl')],
-        ['name' => 'curl', 'label' => 'GitHub API 요청', 'required' => false, 'loaded' => function_exists('curl_init')],
-        ['name' => 'mbstring', 'label' => '문자 길이 처리', 'required' => false, 'loaded' => extension_loaded('mbstring')],
-        ['name' => 'intl', 'label' => '정확한 글자 수 계산', 'required' => false, 'loaded' => extension_loaded('intl')],
+        ['name' => 'pdo_sqlite', 'required' => true, 'loaded' => extension_loaded('pdo_sqlite')],
+        ['name' => 'zip', 'required' => true, 'loaded' => class_exists('ZipArchive')],
+        ['name' => 'openssl', 'required' => true, 'loaded' => extension_loaded('openssl')],
+        ['name' => 'curl', 'required' => false, 'loaded' => function_exists('curl_init')],
+        ['name' => 'mbstring', 'required' => false, 'loaded' => extension_loaded('mbstring')],
+        ['name' => 'intl', 'required' => false, 'loaded' => extension_loaded('intl')],
     ];
 
     return [
@@ -579,9 +628,16 @@ function installRelease(Controller $app, array $release, string $backupPrefix): 
     $zipPath = $updatesDir . DIRECTORY_SEPARATOR . "{$safeTag}.zip";
     $extractDir = $updatesDir . DIRECTORY_SEPARATOR . "extract-{$safeTag}-" . time();
     $zipBody = fetchUrl((string) $release['zip_url']);
+    $actualDigest = hash('sha256', $zipBody);
+    $expectedDigest = strtolower(trim((string) ($release['zip_digest'] ?? '')));
+    $checksumVerified = $expectedDigest !== '';
 
     if (strlen($zipBody) > 50 * 1024 * 1024) {
         throw new RuntimeException('업데이트 압축 파일이 허용 크기(50MB)를 초과합니다.');
+    }
+
+    if ($checksumVerified && !hash_equals($expectedDigest, $actualDigest)) {
+        throw new RuntimeException('업데이트 파일의 SHA-256 체크섬이 GitHub 릴리즈 정보와 일치하지 않습니다.');
     }
 
     if (file_put_contents($zipPath, $zipBody) === false) {
@@ -628,6 +684,7 @@ function installRelease(Controller $app, array $release, string $backupPrefix): 
     return [
         'installed_version' => $tag,
         'backup_path' => 'data/backups/' . basename($backupPath),
+        'checksum_verified' => $checksumVerified,
     ];
 }
 
@@ -771,7 +828,13 @@ function applySafeSchemaStatement(Controller $app, string $statement): void
         throw new RuntimeException('데이터 보존을 위해 안전하지 않은 스키마 문장은 실행하지 않습니다.');
     }
 
-    $app->pdo()->exec($statement);
+    try {
+        $app->pdo()->exec($statement);
+    } catch (PDOException $exception) {
+        if (!$app->isIgnorableSchemaConflict($exception)) {
+            throw $exception;
+        }
+    }
 }
 
 function updateConfigVersion(Controller $app, string $version): void

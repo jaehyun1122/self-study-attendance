@@ -168,7 +168,7 @@ try {
         $statement = $app->pdo()->prepare("DELETE FROM attendance WHERE id IN ({$placeholders})");
         $statement->execute($ids);
 
-        $app->success('선택한 출석 기록이 삭제되었습니다.', ['deleted' => $statement->rowCount()]);
+        $app->success('선택한 출석 기록이 삭제되었습니다.');
     }
 
     if ($type === 'reset_attendance') {
@@ -178,7 +178,7 @@ try {
         $pdo->beginTransaction();
 
         try {
-            $deleted = $pdo->exec('DELETE FROM attendance');
+            $pdo->exec('DELETE FROM attendance');
             $hasSequence = (int) $pdo
                 ->query("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'sqlite_sequence'")
                 ->fetchColumn();
@@ -193,7 +193,7 @@ try {
             throw $exception;
         }
 
-        $app->success('출석 기록이 초기화되었습니다.', ['deleted' => (int) $deleted]);
+        $app->success('출석 기록이 초기화되었습니다.');
     }
 
     if ($type === 'approve_location') {
@@ -406,7 +406,6 @@ try {
 
     $app->success('저장되었습니다.', [
         'attend_date' => $attendDate,
-        'created_at' => $createdAt,
     ]);
 } catch (Throwable $exception) {
     $app->failWithException('출석 기록 저장 중 오류가 발생했습니다.', $exception);

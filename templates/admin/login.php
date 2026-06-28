@@ -12,6 +12,9 @@
   <link rel="stylesheet" href="<?php echo $h($asset('/assets/styles.css')); ?>">
 </head>
 <body class="bg-body-tertiary">
+  <button class="theme-toggle-button page-theme-toggle" type="button" data-theme-toggle aria-label="다크 모드로 전환" title="다크 모드로 전환">
+    <i class="bi bi-moon-stars"></i>
+  </button>
   <main class="min-vh-100 d-flex align-items-center justify-content-center p-3">
     <section class="card border-0 shadow-sm w-100 auth-card">
       <div class="card-body p-4">
@@ -35,7 +38,7 @@
           <button class="btn btn-success btn-lg w-100" id="loginButton" type="submit">로그인</button>
         </form>
 
-        <button class="forgot-password-link" id="forgotPasswordButton" type="button">비밀번호를 잊어먹었나요?</button>
+        <button class="forgot-password-link" id="forgotPasswordButton" type="button">비밀번호를 잊으셨나요?</button>
         <p class="small-note" id="installNotice"></p>
         <p class="small-note version-note">현재 버전 <?php echo $h($app->string('app_version')); ?></p>
       </div>
@@ -45,26 +48,27 @@
   <div class="admin-modal" id="forgotPasswordModal" hidden>
     <section class="admin-modal-dialog forgot-password-dialog" role="dialog" aria-modal="true" aria-labelledby="forgotPasswordTitle">
       <div class="admin-modal-header">
-        <h2 id="forgotPasswordTitle">관리자 비밀번호 초기화</h2>
+        <h2 id="forgotPasswordTitle">비밀번호 재설정 안내</h2>
         <button class="btn btn-sm btn-outline-secondary" id="closeForgotPasswordButton" type="button" aria-label="닫기">
           <i class="bi bi-x-lg"></i>
         </button>
       </div>
-      <p>보안을 위해 로그인 화면에서는 비밀번호를 바로 초기화할 수 없습니다.</p>
-      <p>서버 터미널에서 프로젝트 루트로 이동한 뒤 다음 명령을 실행하세요.</p>
+      <p>관리자 비밀번호는 서버에서 다시 설정할 수 있습니다.</p>
+      <p>서버 터미널에서 프로젝트 폴더로 이동한 뒤 아래 명령어를 실행해주세요.</p>
       <div class="password-reset-command-row">
         <code class="password-reset-command" id="passwordResetCommand">php cli/reset-admin-password.php</code>
         <button class="password-reset-copy-button" id="copyPasswordResetCommandButton" type="button" aria-label="명령어 복사" title="명령어 복사">
           <i class="bi bi-copy" aria-hidden="true"></i>
         </button>
       </div>
-      <p class="form-text mb-0">새 비밀번호를 두 번 입력하면 관리자 비밀번호가 변경되고 기존 로그인 세션은 모두 종료됩니다.</p>
+      <p class="form-text mb-0">보안 정책에 따라 비밀번호 재설정 후에는 기존 로그인 세션이 모두 만료됩니다.</p>
     </section>
   </div>
 
   <div id="toastRoot" class="toast-root" aria-live="polite"></div>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/toastify-js@1.12.0"></script>
+  <script src="<?php echo $h($asset('/assets/public-utils.js')); ?>"></script>
   <script src="<?php echo $h($asset('/assets/admin-login.js')); ?>"></script>
 </body>
 </html>
