@@ -26,7 +26,8 @@ try {
     $app->clearAuthFailures('admin-auth');
     $token = bin2hex(random_bytes(32));
     $now = new DateTimeImmutable('now');
-    $expiredAt = $now->add(new DateInterval('PT' . $app->int('token_expire_hours', 12) . 'H'));
+    $sessionHours = max(1, $app->int('token_expire_hours', 12));
+    $expiredAt = $now->add(new DateInterval('PT' . $sessionHours . 'H'));
     $format = 'Y-m-d H:i:s';
     $app->pdo()
         ->prepare('DELETE FROM admin_tokens WHERE expired_at <= :now')

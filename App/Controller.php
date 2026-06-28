@@ -481,7 +481,7 @@ final class Controller
         $nowDateTime = new \DateTimeImmutable('now');
         $now = $nowDateTime->format('Y-m-d H:i:s');
         $statement = $this->pdo()->prepare(
-            'SELECT id, expired_at FROM admin_tokens WHERE token = :token'
+            'SELECT id, expired_at, last_seen_at FROM admin_tokens WHERE token = :token'
         );
         $statement->execute([
             ':token' => $this->hashToken($token),
@@ -509,20 +509,38 @@ final class Controller
 
         if ($refresh) {
             $sessionHours = max(1, $this->int('token_expire_hours', 12));
-            $newExpiresAt = $nowDateTime->modify("+{$sessionHours} hours");
+            $refreshThresholdHours = max(0, $this->int('token_refresh_threshold_hours', 3));
+            $shouldExtend = $refreshThresholdHours > 0
+                && $expiresAt <= $nowDateTime->modify("+{$refreshThresholdHours} hours");
+            $lastSeenAt = $this->dateTimeOrNull($session['last_seen_at'] ?? null);
+            $shouldTouch = $lastSeenAt === null
+                || $lastSeenAt <= $nowDateTime->modify('-5 minutes');
+            $newExpiresAt = $shouldExtend
+                ? $nowDateTime->modify("+{$sessionHours} hours")
+                : $expiresAt;
 
             try {
-                $touch = $this->pdo()->prepare(
-                    'UPDATE admin_tokens
-                     SET last_seen_at = :last_seen_at, expired_at = :expired_at
-                     WHERE id = :id'
-                );
-                $touch->execute([
-                    ':last_seen_at' => $now,
-                    ':expired_at' => $newExpiresAt->format('Y-m-d H:i:s'),
-                    ':id' => (int) $session['id'],
-                ]);
-                $this->setAdminCookie($token, $newExpiresAt->getTimestamp());
+                if ($shouldExtend) {
+                    $touch = $this->pdo()->prepare(
+                        'UPDATE admin_tokens
+                         SET last_seen_at = :last_seen_at, expired_at = :expired_at
+                         WHERE id = :id'
+                    );
+                    $touch->execute([
+                        ':last_seen_at' => $now,
+                        ':expired_at' => $newExpiresAt->format('Y-m-d H:i:s'),
+                        ':id' => (int) $session['id'],
+                    ]);
+                    $this->setAdminCookie($token, $newExpiresAt->getTimestamp());
+                } elseif ($shouldTouch) {
+                    $touch = $this->pdo()->prepare(
+                        'UPDATE admin_tokens SET last_seen_at = :last_seen_at WHERE id = :id'
+                    );
+                    $touch->execute([
+                        ':last_seen_at' => $now,
+                        ':id' => (int) $session['id'],
+                    ]);
+                }
             } catch (Throwable $exception) {
                 error_log('Admin session refresh skipped: ' . $exception->getMessage());
             }
@@ -538,7 +556,7 @@ final class Controller
         $this->requireInstalled();
         $cookieToken = $_COOKIE['admin_token'] ?? null;
 
-        if (is_string($cookieToken) && $this->checkAdminToken($cookieToken, false)) {
+        if (is_string($cookieToken) && $this->checkAdminToken($cookieToken)) {
             return $cookieToken;
         }
 

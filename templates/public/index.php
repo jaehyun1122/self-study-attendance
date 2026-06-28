@@ -27,12 +27,14 @@
           <img class="brand-logo" src="<?php echo $h($asset('/assets/logo.png')); ?>" width="24" height="24" alt="" aria-hidden="true">
           <span class="section-kicker">Self Study Attendance</span>
           <span class="app-version"><?php echo $h($app->string('app_version')); ?></span>
-          <button class="theme-toggle-button" type="button" data-theme-toggle aria-label="현재 테마: 시스템. 밝게 모드로 전환" title="현재 테마: 시스템. 밝게 모드로 전환">
-            <i class="bi bi-circle-half"></i>
-          </button>
         </div>
         <div class="attendance-heading-copy">
-          <h1>자습 출석 체크</h1>
+          <div class="attendance-title-line">
+            <h1>자습 출석 체크</h1>
+            <button class="theme-toggle-button" type="button" data-theme-toggle aria-label="현재 테마: 시스템. 밝게 모드로 전환" title="현재 테마: 시스템. 밝게 모드로 전환">
+              <i class="bi bi-circle-half"></i>
+            </button>
+          </div>
           <p>학번과 이름을 저장한 뒤 한 번의 클릭으로 출석을 기록합니다.</p>
         </div>
         <div class="attendance-panel-tools">

@@ -54,12 +54,23 @@
   min-width: 0;
 }
 
+.attendance-title-line {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .attendance-panel-header h1 {
   margin: 0 0 10px;
   font-size: clamp(2rem, 4vw, 2.8rem);
   font-weight: 900;
   line-height: 1.08;
   word-break: keep-all;
+  white-space: nowrap;
+}
+
+.attendance-title-line .theme-toggle-button {
+  margin: 0 0 10px;
 }
 
 .attendance-panel-header p {
@@ -283,15 +294,13 @@
   .public-logo-line {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) auto;
-    grid-template-rows: auto auto;
     column-gap: 10px;
-    row-gap: 6px;
     margin-bottom: 0.45rem;
   }
 
   .public-logo-line .brand-logo {
     grid-column: 1;
-    grid-row: 1 / span 2;
+    grid-row: 1;
     align-self: center;
   }
 
@@ -305,23 +314,17 @@
   }
 
   .public-logo-line .app-version {
-    grid-column: 2;
-    grid-row: 2;
-    justify-self: start;
-  }
-
-  .public-logo-line .theme-toggle-button {
     grid-column: 3;
-    grid-row: 1 / span 2;
+    grid-row: 1;
     align-self: center;
-    margin-left: 0;
+    justify-self: end;
   }
 
   .attendance-shell {
     width: min(100% - 20px, 440px);
     min-height: 100svh;
     align-items: flex-start;
-    padding: 10px 0 18px;
+    padding: max(24px, env(safe-area-inset-top)) 0 18px;
   }
 
   .attendance-panel {
@@ -337,7 +340,18 @@
 
   .attendance-panel-header h1 {
     margin-bottom: 8px;
-    font-size: 1.55rem;
+    font-size: clamp(1.35rem, 7vw, 1.55rem);
+  }
+
+  .attendance-title-line {
+    gap: 10px;
+  }
+
+  .attendance-title-line .theme-toggle-button {
+    width: 36px;
+    height: 36px;
+    flex-basis: 36px;
+    margin-bottom: 8px;
   }
 
   .attendance-panel-header p {

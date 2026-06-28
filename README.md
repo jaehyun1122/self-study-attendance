@@ -4,7 +4,7 @@ PHP와 SQLite로 동작하는 학교 자습 출석 관리 시스템입니다.
 학생은 학번과 이름으로 출석하고, 관리자는 출석 기록과 위치 인증,
 로그인 세션 및 시스템 업데이트를 관리할 수 있습니다.
 
-- 현재 버전: `v1.9.6`
+- 현재 버전: `v1.9.7`
 - 저장소:
   [jaehyun1122/self-study-attendance](https://github.com/jaehyun1122/self-study-attendance)
 - 라이선스: MIT
@@ -91,7 +91,8 @@ Nginx에서는 PHP-FPM 연결 외에 `data/`, `App/`, `templates/`, `cli/`와
 ### 인증 및 입력 제한
 
 - `initial_admin_password`: 설치 마법사 승인 비밀번호
-- `token_expire_hours`: 관리자 페이지 이동 시 갱신되는 로그인 세션 유지 시간
+- `token_expire_hours`: 로그인 세션 유지 시간
+- `token_refresh_threshold_hours`: 활동 중인 로그인 세션을 연장할 만료 전 남은 시간, `0`이면 자동 연장 안 함
 - `password_length`: 관리자 비밀번호 최소·최대 길이, 기본 4~32자
 - `auth_rate_limit`: 인증 실패 횟수, 계산 시간 및 차단 시간
 - `student_no_length`: 학번 최소·최대 길이
