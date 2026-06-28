@@ -2,7 +2,3 @@
   RewriteEngine On
   RewriteRule ^(?:App|cli|data|templates|\.(?:git|agents|codex))(?:/|$) - [F,L,NC]
 </IfModule>
-
-<FilesMatch "(?i)(^\.|\.sqlite(?:-.+)?$|\.sql$|\.zip$)">
-  Require all denied
-</FilesMatch>

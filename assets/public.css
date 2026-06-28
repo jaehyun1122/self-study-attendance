@@ -1,14 +1,81 @@
-/* Public attendance and install pages */
+/* Shared attendance and installation shell */
+
+.section-kicker {
+  display: block;
+  margin-bottom: 0.45rem;
+  color: var(--app-primary);
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.public-logo-line {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  gap: 10px;
+}
+
+.public-brand-link {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  gap: 10px;
+  color: var(--app-primary);
+  text-decoration: none;
+}
+
+.public-brand-link:hover,
+.public-brand-link:focus-visible {
+  color: var(--app-primary);
+}
+
+.public-brand-link .brand-logo {
+  width: 28px !important;
+  height: 28px !important;
+  max-width: 28px !important;
+  max-height: 28px !important;
+  min-width: 28px;
+  min-height: 28px;
+  border-radius: 7px;
+}
+
+.public-logo-line .section-kicker {
+  margin-bottom: 0;
+  color: inherit;
+  font-size: 0.82rem;
+  line-height: 1;
+}
+
+.app-version {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 2px 8px;
+  border: 1px solid var(--app-border);
+  border-radius: 999px;
+  color: var(--app-muted);
+  font-size: 0.76rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
 .attendance-body {
+  min-height: 100vh;
+  min-height: 100dvh;
   background:
     radial-gradient(circle at top left, rgba(25, 135, 84, 0.12), transparent 34%),
     linear-gradient(135deg, rgba(25, 135, 84, 0.08), rgba(255, 255, 255, 0) 42%),
     var(--app-bg);
+  background-attachment: fixed;
+  background-size: cover;
 }
 
 .attendance-shell {
   width: min(100% - 32px, 720px);
   min-height: 100vh;
+  min-height: 100dvh;
   margin: 0 auto;
   display: flex;
   align-items: center;
@@ -32,13 +99,8 @@
     var(--app-bg);
 }
 
-:root[data-theme="dark"] .attendance-panel,
-:root[data-theme="dark"] .student-edit-dialog {
+:root[data-theme="dark"] .attendance-panel {
   background: rgba(18, 18, 18, 0.98);
-  color: var(--app-text);
-}
-
-:root[data-theme="dark"] #locationConfirmMessage {
   color: var(--app-text);
 }
 
@@ -60,14 +122,27 @@
   margin-bottom: 0;
 }
 
-.header-theme-toggle {
+.public-header-actions {
+  display: contents;
+}
+
+.public-header-actions .app-version {
   grid-column: 2;
   grid-row: 1;
   align-self: center;
+  justify-self: center;
+}
+
+.header-theme-toggle {
+  grid-column: 2;
+  grid-row: 2;
+  align-self: start;
+  justify-self: center;
 }
 
 .attendance-heading-copy {
-  grid-column: 1 / -1;
+  grid-column: 1;
+  grid-row: 2;
   min-width: 0;
 }
 
@@ -88,27 +163,6 @@
   white-space: nowrap;
 }
 
-.attendance-panel-tools {
-  grid-column: 1 / -1;
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.attendance-clock {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  width: fit-content;
-  padding: 12px 14px;
-  border: 1px solid var(--app-border);
-  border-radius: 8px;
-  background: var(--app-soft);
-  color: var(--app-muted);
-  font-weight: 700;
-}
 
 .attendance-step-heading {
   margin-bottom: 20px;
@@ -120,219 +174,30 @@
   font-weight: 850;
 }
 
-.student-chip {
-  display: grid;
-  gap: 6px;
-  padding: 22px;
-  margin-bottom: 18px;
-  border: 1px solid var(--app-border);
-  border-radius: 8px;
-  background: var(--app-soft);
-  cursor: default;
-  user-select: none;
-}
-
-.student-chip span {
-  color: var(--app-muted);
-  font-size: 0.88rem;
-  font-weight: 700;
-}
-
-.student-chip strong {
-  font-size: 1.55rem;
-}
-
-.attendance-location-notice {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  margin: -4px 0 14px;
-  color: var(--app-muted);
-  font-size: 0.95rem;
-  line-height: 1.45;
-  word-break: keep-all;
-}
-
-.attendance-location-notice i {
-  color: var(--app-primary);
-  flex: 0 0 auto;
-  margin-top: 2px;
-}
-
-.student-edit-modal {
-  position: fixed;
-  inset: 0;
-  z-index: 1100;
-  display: grid;
-  place-items: center;
-  padding: 18px;
-  background: rgba(0, 0, 0, 0.55);
-}
-
-.student-edit-dialog {
-  width: min(100%, 420px);
-  padding: 24px;
-  border-radius: 8px;
-  background: #fff;
-  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.22);
-}
-
-.student-edit-dialog h2 {
-  margin: 0 0 8px;
-  font-size: 1.28rem;
-  font-weight: 850;
-}
-
-.student-edit-dialog p {
-  margin: 0 0 18px;
-  color: var(--app-muted);
-}
-
-#locationConfirmMessage {
-  color: #334155;
-  line-height: 1.62;
-  white-space: pre-line;
-  word-break: keep-all;
-}
-
-.student-edit-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 18px;
-}
-
-.attendance-submit {
-  min-height: 58px;
-}
-
-.result-card {
-  display: grid;
-  justify-items: center;
-  gap: 18px;
-  padding: 12px 0 0;
-  text-align: center;
-  opacity: 0;
-  transform: translateY(8px) scale(0.98);
-  animation: resultShow 0.28s ease forwards;
-}
-
-.result-icon {
-  width: 64px;
-  height: 64px;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  background: var(--bs-success-bg-subtle);
-  color: var(--app-primary);
-  font-size: 2rem;
-  font-weight: 800;
-  animation: resultPulse 0.55s ease;
-}
-
-.result-copy {
-  display: grid;
-  gap: 7px;
-}
-
-.result-copy h2 {
-  margin: 0;
-  font-size: 1.7rem;
-  font-weight: 850;
-}
-
-.result-student {
-  margin: 0;
-  font-size: 1.08rem;
-  font-weight: 800;
-}
-
-.result-time,
-.result-message {
-  margin: 0;
-  color: var(--app-muted);
-}
-
-.result-card.duplicate .result-icon {
-  background: var(--bs-warning-bg-subtle);
-  color: var(--bs-warning-text-emphasis);
-}
-
-.result-card.error .result-icon {
-  background: var(--bs-danger-bg-subtle);
-  color: var(--app-danger);
-}
-
-.install-wizard-box {
-  display: grid;
-  gap: 16px;
-  padding: 18px;
-  border: 1px solid var(--app-border);
-  border-radius: 8px;
-  background: var(--app-soft);
-}
-
-.install-wizard-box p {
-  margin: 0;
-  color: var(--app-muted);
-  line-height: 1.55;
-}
-
-.location-help-box {
-  margin: 14px 0 0;
-  padding: 12px 14px;
-  border: 1px solid var(--app-border);
-  border-radius: 8px;
-  background: var(--app-soft);
-  color: var(--app-muted);
-  font-size: 0.92rem;
-  line-height: 1.55;
-  white-space: pre-line;
-}
-
-.location-confirm-dialog {
-  width: min(100%, 480px);
-}
-
-.location-confirm-actions {
-  flex-wrap: wrap;
-}
 
 @media (max-width: 576px) {
   .public-logo-line {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
-    column-gap: 10px;
-    margin-bottom: 0.45rem;
+    display: flex;
+    width: 100%;
+    overflow: hidden;
   }
 
-  .public-logo-line .brand-logo {
-    grid-column: 1;
-    grid-row: 1;
-    align-self: center;
+  .public-brand-link {
+    overflow: hidden;
   }
 
   .public-logo-line .section-kicker {
-    grid-column: 2;
-    grid-row: 1;
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
-  .public-logo-line .app-version {
-    grid-column: 3;
-    grid-row: 1;
-    align-self: center;
-    justify-self: end;
-  }
-
   .attendance-shell {
     width: min(100% - 20px, 440px);
     min-height: 100svh;
     align-items: flex-start;
-    padding: max(24px, env(safe-area-inset-top)) 0 18px;
+    padding: max(32px, env(safe-area-inset-top)) 0 18px;
   }
 
   .attendance-panel {
@@ -355,20 +220,6 @@
     white-space: normal;
   }
 
-  .attendance-panel-tools {
-    width: 100%;
-    align-items: stretch;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .attendance-clock {
-    width: min(100%, 100%);
-    justify-content: center;
-    flex: 1 1 auto;
-    padding: 10px 12px;
-    font-size: 0.84rem;
-  }
 
   .attendance-step-heading {
     margin-bottom: 14px;
@@ -381,36 +232,5 @@
   .attendance-panel .form-control-lg {
     min-height: 48px;
     font-size: 1rem;
-  }
-
-  .student-chip {
-    padding: 16px;
-  }
-
-  .student-chip strong {
-    font-size: 1.25rem;
-  }
-
-  .attendance-submit {
-    min-height: 52px;
-  }
-
-  .result-icon {
-    width: 56px;
-    height: 56px;
-    font-size: 1.75rem;
-  }
-
-  .result-copy h2 {
-    font-size: 1.45rem;
-  }
-
-  .student-edit-actions {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .student-edit-actions .btn {
-    width: 100%;
   }
 }

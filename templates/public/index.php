@@ -18,19 +18,24 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/toastify-js@1.12.0/src/toastify.min.css">
   <link rel="stylesheet" href="<?php echo $h($asset('/assets/styles.css')); ?>">
   <link rel="stylesheet" href="<?php echo $h($asset('/assets/public.css')); ?>">
+  <link rel="stylesheet" href="<?php echo $h($asset('/assets/app.css')); ?>">
 </head>
 <body class="attendance-body" data-auto-refresh-seconds="<?php echo $h((string) max(0, min(86400, $app->int('auto_refresh_seconds', 5)))); ?>">
   <main class="attendance-shell">
     <section class="attendance-panel" aria-live="polite">
       <header class="attendance-panel-header">
         <div class="public-logo-line">
-          <img class="brand-logo" src="<?php echo $h($asset('/assets/logo.png')); ?>" width="24" height="24" alt="" aria-hidden="true">
-          <span class="section-kicker">Self Study Attendance</span>
-          <span class="app-version"><?php echo $h($app->string('app_version')); ?></span>
+          <a class="public-brand-link" href="/" aria-label="출석 페이지 새로고침">
+            <img class="brand-logo" src="<?php echo $h($asset('/assets/logo.png')); ?>" width="28" height="28" alt="" aria-hidden="true">
+            <span class="section-kicker">Self Study Attendance</span>
+          </a>
         </div>
-        <button class="theme-toggle-button header-theme-toggle" type="button" data-theme-toggle aria-label="현재 테마: 시스템. 밝게 모드로 전환" title="현재 테마: 시스템. 밝게 모드로 전환">
-          <i class="bi bi-circle-half"></i>
-        </button>
+        <div class="public-header-actions">
+          <span class="app-version"><?php echo $h($app->string('app_version')); ?></span>
+          <button class="theme-toggle-button header-theme-toggle" type="button" data-theme-toggle aria-label="현재 테마: 시스템. 밝게 모드로 전환" title="현재 테마: 시스템. 밝게 모드로 전환">
+            <i class="bi bi-circle-half"></i>
+          </button>
+        </div>
         <div class="attendance-heading-copy">
           <h1>자습 출석 체크</h1>
           <p>학번과 이름을 저장한 뒤 한 번의 클릭으로 출석을 기록합니다.</p>

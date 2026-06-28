@@ -14,19 +14,24 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/toastify-js@1.12.0/src/toastify.min.css">
   <link rel="stylesheet" href="<?php echo $h($asset('/assets/styles.css')); ?>">
   <link rel="stylesheet" href="<?php echo $h($asset('/assets/public.css')); ?>">
+  <link rel="stylesheet" href="<?php echo $h($asset('/assets/install.css')); ?>">
 </head>
 <body class="attendance-body">
   <main class="attendance-shell">
     <section class="attendance-panel" aria-live="polite">
       <header class="attendance-panel-header">
         <div class="public-logo-line">
-          <img class="brand-logo" src="<?php echo $h($asset('/assets/logo.png')); ?>" width="24" height="24" alt="" aria-hidden="true">
-          <span class="section-kicker">Self Study Attendance</span>
-          <span class="app-version"><?php echo $h($app->string('app_version')); ?></span>
+          <a class="public-brand-link" href="/install.php" aria-label="설치 페이지 새로고침">
+            <img class="brand-logo" src="<?php echo $h($asset('/assets/logo.png')); ?>" width="28" height="28" alt="" aria-hidden="true">
+            <span class="section-kicker">Self Study Attendance</span>
+          </a>
         </div>
-        <button class="theme-toggle-button header-theme-toggle" type="button" data-theme-toggle aria-label="현재 테마: 시스템. 밝게 모드로 전환" title="현재 테마: 시스템. 밝게 모드로 전환">
-          <i class="bi bi-circle-half"></i>
-        </button>
+        <div class="public-header-actions">
+          <span class="app-version"><?php echo $h($app->string('app_version')); ?></span>
+          <button class="theme-toggle-button header-theme-toggle" type="button" data-theme-toggle aria-label="현재 테마: 시스템. 밝게 모드로 전환" title="현재 테마: 시스템. 밝게 모드로 전환">
+            <i class="bi bi-circle-half"></i>
+          </button>
+        </div>
         <div class="attendance-heading-copy">
           <h1>초기 설치</h1>
           <p>출석 시스템을 처음 사용할 수 있도록 데이터베이스와 관리자 계정을 준비합니다.</p>

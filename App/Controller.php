@@ -5,62 +5,45 @@ declare(strict_types=1);
 namespace App;
 
 use PDO;
-use PDOException;
 use Throwable;
 
-require_once __DIR__ . '/Database.php';
+require_once __DIR__ . '/Config.php';
+require_once __DIR__ . '/SchemaManager.php';
 
 final class Controller
 {
     public const STATUS_SUCCESS = 1;
     public const STATUS_ERROR = 2;
-    private const SCHEMA_VERSION = 10904;
-
-    /** @var array<string, mixed> */
-    private array $config;
+    private Config $config;
 
     private Database $database;
 
-    private bool $schemaReady = false;
+    private SchemaManager $schemaManager;
 
     private string $adminTokenFailureReason = 'login-required';
 
     public function __construct()
     {
-        $config = require __DIR__ . '/../data/config.php';
-        $this->config = is_array($config) ? $config : [];
+        $this->config = Config::fromFile(__DIR__ . '/../data/config.php');
         date_default_timezone_set($this->string('timezone', 'Asia/Seoul'));
         $this->database = new Database($this->config);
+        $this->schemaManager = new SchemaManager($this->database);
         $this->sendSecurityHeaders();
     }
 
     public function get(string $key, mixed $default = null): mixed
     {
-        $value = $this->config;
-
-        foreach (explode('.', $key) as $segment) {
-            if (!is_array($value) || !array_key_exists($segment, $value)) {
-                return $default;
-            }
-
-            $value = $value[$segment];
-        }
-
-        return $value;
+        return $this->config->get($key, $default);
     }
 
     public function string(string $key, string $default = ''): string
     {
-        $value = $this->get($key, $default);
-
-        return is_scalar($value) ? (string) $value : $default;
+        return $this->config->string($key, $default);
     }
 
     public function int(string $key, int $default = 0): int
     {
-        $value = $this->get($key, $default);
-
-        return is_numeric($value) ? (int) $value : $default;
+        return $this->config->int($key, $default);
     }
 
     /**
@@ -68,43 +51,12 @@ final class Controller
      */
     public function lengthRange(string $key, int $defaultMin, ?int $defaultMax = null): array
     {
-        $defaultMax ??= $defaultMin;
-        $value = $this->get($key);
-
-        if (is_array($value)) {
-            $minValue = $value['min'] ?? $value[0] ?? $defaultMin;
-            $maxValue = $value['max'] ?? $value[1] ?? $defaultMax;
-        } elseif (is_numeric($value)) {
-            $minValue = $value;
-            $maxValue = $value;
-        } else {
-            $minValue = $defaultMin;
-            $maxValue = $defaultMax;
-        }
-
-        $min = max(0, (int) $minValue);
-        $max = max(0, (int) $maxValue);
-
-        if ($max < $min) {
-            [$min, $max] = [$max, $min];
-        }
-
-        return ['min' => $min, 'max' => $max];
+        return $this->config->lengthRange($key, $defaultMin, $defaultMax);
     }
 
     public function lengthRequirementText(string $subject, string $key, int $defaultMin, ?int $defaultMax = null): string
     {
-        $range = $this->lengthRange($key, $defaultMin, $defaultMax);
-
-        if ($range['min'] === $range['max']) {
-            return "{$subject} {$range['min']}자로 입력해주세요.";
-        }
-
-        if ($range['min'] < 1) {
-            return "{$subject} {$range['max']}자까지 입력할 수 있습니다.";
-        }
-
-        return "{$subject} {$range['min']}자 이상 {$range['max']}자까지 입력할 수 있습니다.";
+        return $this->config->lengthRequirementText($subject, $key, $defaultMin, $defaultMax);
     }
 
     /**
@@ -112,9 +64,7 @@ final class Controller
      */
     public function array(string $key, array $default = []): array
     {
-        $value = $this->get($key, $default);
-
-        return is_array($value) ? $value : $default;
+        return $this->config->array($key, $default);
     }
 
     public function setting(string $key, mixed $default = null): mixed
@@ -782,14 +732,7 @@ final class Controller
 
     public function isIgnorableSchemaConflict(Throwable $exception): bool
     {
-        if (!$exception instanceof PDOException) {
-            return false;
-        }
-
-        $message = strtolower($exception->getMessage());
-
-        return str_contains($message, 'duplicate column name')
-            || str_contains($message, 'already exists');
+        return SchemaManager::isIgnorableConflict($exception);
     }
 
     public function clientIpAddress(): string
@@ -869,127 +812,7 @@ final class Controller
 
     private function migrateInstalledDatabase(): void
     {
-        if ($this->schemaReady) {
-            return;
-        }
-
-        $pdo = $this->pdo();
-        $version = (int) $pdo->query('PRAGMA user_version')->fetchColumn();
-
-        if ($version >= self::SCHEMA_VERSION) {
-            $this->schemaReady = true;
-            return;
-        }
-
-        $pdo->exec('BEGIN IMMEDIATE');
-
-        try {
-            $version = (int) $pdo->query('PRAGMA user_version')->fetchColumn();
-
-            if ($version >= self::SCHEMA_VERSION) {
-                $pdo->commit();
-                $this->schemaReady = true;
-                return;
-            }
-
-            $pdo->exec(
-                "CREATE TABLE IF NOT EXISTS app_settings (
-                    setting_key TEXT PRIMARY KEY,
-                    setting_value TEXT NOT NULL,
-                    updated_at TEXT NOT NULL
-                )"
-            );
-            $pdo->exec(
-                "CREATE TABLE IF NOT EXISTS auth_rate_limits (
-                    scope TEXT NOT NULL,
-                    identifier TEXT NOT NULL,
-                    attempts INTEGER NOT NULL DEFAULT 0,
-                    window_started_at TEXT NOT NULL,
-                    blocked_until TEXT,
-                    updated_at TEXT NOT NULL,
-                    PRIMARY KEY (scope, identifier)
-                )"
-            );
-            $pdo->exec('CREATE INDEX IF NOT EXISTS idx_auth_rate_limits_updated_at ON auth_rate_limits(updated_at)');
-
-            $hasAdminTokens = ((int) $pdo
-                ->query("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'admin_tokens'")
-                ->fetchColumn()) > 0;
-
-            if ($hasAdminTokens) {
-                $tokenColumns = [];
-                foreach ($pdo->query('PRAGMA table_info(admin_tokens)')->fetchAll() as $column) {
-                    if (isset($column['name'])) {
-                        $tokenColumns[(string) $column['name']] = true;
-                    }
-                }
-
-                $tokenColumnDefinitions = [
-                    'last_seen_at' => 'last_seen_at TEXT',
-                    'ip_address' => 'ip_address TEXT',
-                    'user_agent' => 'user_agent TEXT',
-                ];
-
-                foreach ($tokenColumnDefinitions as $name => $definition) {
-                    if (!isset($tokenColumns[$name])) {
-                        $pdo->exec("ALTER TABLE admin_tokens ADD COLUMN {$definition}");
-                    }
-                }
-
-                $pdo->exec('CREATE INDEX IF NOT EXISTS idx_admin_tokens_expired_at ON admin_tokens(expired_at)');
-            }
-
-            $hasAttendance = ((int) $pdo
-                ->query("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'attendance'")
-                ->fetchColumn()) > 0;
-
-            if ($hasAttendance) {
-                $columns = [];
-                foreach ($pdo->query('PRAGMA table_info(attendance)')->fetchAll() as $column) {
-                    if (isset($column['name'])) {
-                        $columns[(string) $column['name']] = true;
-                    }
-                }
-
-                $addColumn = function (string $name, string $definition) use ($pdo, &$columns): void {
-                    if (isset($columns[$name])) {
-                        return;
-                    }
-
-                    try {
-                        $pdo->exec("ALTER TABLE attendance ADD COLUMN {$definition}");
-                    } catch (PDOException $exception) {
-                        if (!$this->isIgnorableSchemaConflict($exception)) {
-                            throw $exception;
-                        }
-                    }
-
-                    $columns[$name] = true;
-                };
-
-                $addColumn('location_status', "location_status TEXT NOT NULL DEFAULT 'unchecked'");
-                $addColumn('location_latitude', 'location_latitude REAL');
-                $addColumn('location_longitude', 'location_longitude REAL');
-                $addColumn('location_accuracy', 'location_accuracy REAL');
-                $addColumn('location_distance_meters', 'location_distance_meters REAL');
-                $addColumn('location_message', 'location_message TEXT');
-                $addColumn('location_checked_at', 'location_checked_at TEXT');
-                $addColumn('location_approved_at', 'location_approved_at TEXT');
-                $pdo->exec('CREATE INDEX IF NOT EXISTS idx_attendance_attend_date ON attendance(attend_date)');
-                $pdo->exec('CREATE INDEX IF NOT EXISTS idx_attendance_location_status ON attendance(location_status)');
-                $pdo->exec('CREATE INDEX IF NOT EXISTS idx_attendance_created_at ON attendance(created_at)');
-            }
-
-            $pdo->exec('PRAGMA user_version = ' . self::SCHEMA_VERSION);
-            $pdo->commit();
-            $this->schemaReady = true;
-        } catch (Throwable $exception) {
-            if ($pdo->inTransaction()) {
-                $pdo->rollBack();
-            }
-
-            throw $exception;
-        }
+        $this->schemaManager->migrate();
     }
 
     private function isHttps(): bool
@@ -1007,31 +830,6 @@ final class Controller
         header('X-Frame-Options: SAMEORIGIN');
         header('Referrer-Policy: strict-origin-when-cross-origin');
         header('Permissions-Policy: geolocation=(self)');
-    }
-
-    private function serverHeaderValue(string $headerName): string
-    {
-        $key = strtoupper(str_replace('-', '_', trim($headerName)));
-        $serverKey = str_starts_with($key, 'HTTP_') ? $key : 'HTTP_' . $key;
-        $value = trim((string) ($_SERVER[$serverKey] ?? ''));
-
-        if ($value !== '' || !function_exists('getallheaders')) {
-            return $value;
-        }
-
-        $headers = getallheaders();
-
-        if (!is_array($headers)) {
-            return '';
-        }
-
-        foreach ($headers as $name => $headerValue) {
-            if (strcasecmp((string) $name, $headerName) === 0) {
-                return trim((string) $headerValue);
-            }
-        }
-
-        return '';
     }
 
     private function dateTimeOrNull(mixed $value): ?\DateTimeImmutable

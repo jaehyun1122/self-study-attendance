@@ -13,6 +13,8 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.css">
   <?php endif; ?>
   <link rel="stylesheet" href="<?php echo $h($asset('/assets/styles.css')); ?>">
+  <link rel="stylesheet" href="<?php echo $h($asset('/assets/admin-common.css')); ?>">
+  <link rel="stylesheet" href="<?php echo $h($asset('/assets/admin.css')); ?>">
 </head>
 <body class="bg-body-tertiary" data-auto-refresh-seconds="<?php echo $h((string) max(0, min(86400, $app->int('auto_refresh_seconds', 5)))); ?>">
   <nav class="navbar navbar-expand-lg bg-white border-bottom sticky-top d-lg-none">
@@ -25,8 +27,12 @@
         <button class="theme-toggle-button" type="button" data-theme-toggle aria-label="현재 테마: 시스템. 밝게 모드로 전환" title="현재 테마: 시스템. 밝게 모드로 전환">
           <i class="bi bi-circle-half"></i>
         </button>
-        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#adminNavbar" aria-controls="adminNavbar" aria-expanded="false" aria-label="메뉴 열기">
-          <span class="navbar-toggler-icon"></span>
+        <button class="navbar-toggler" type="button" data-admin-menu-toggle data-bs-toggle="collapse" data-bs-target="#adminNavbar" aria-controls="adminNavbar" aria-expanded="false" aria-label="메뉴 열기">
+          <span class="admin-menu-toggle-icon" aria-hidden="true">
+            <span></span>
+            <span></span>
+            <span></span>
+          </span>
         </button>
       </div>
       <div class="collapse navbar-collapse" id="adminNavbar">

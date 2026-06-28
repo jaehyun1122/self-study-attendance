@@ -135,6 +135,10 @@
         icon.className = THEME_META[normalizedTheme].icon;
       }
     });
+
+    document.dispatchEvent(new CustomEvent('attendance:theme-change', {
+      detail: { preference: normalizedTheme, resolved: resolvedTheme },
+    }));
   }
 
   function initThemeToggles(root = document) {
@@ -277,7 +281,6 @@
     formatUptimeSeconds,
     fromDateTimeLocal,
     initPasswordToggles,
-    initThemeToggles,
     inputRange,
     meterText,
     nullableNumber,

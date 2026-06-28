@@ -10,9 +10,11 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/toastify-js@1.12.0/src/toastify.min.css">
   <link rel="stylesheet" href="<?php echo $h($asset('/assets/styles.css')); ?>">
+  <link rel="stylesheet" href="<?php echo $h($asset('/assets/admin-common.css')); ?>">
+  <link rel="stylesheet" href="<?php echo $h($asset('/assets/admin-login.css')); ?>">
 </head>
-<body class="bg-body-tertiary">
-  <main class="min-vh-100 d-flex align-items-center justify-content-center p-3">
+<body class="auth-body bg-body-tertiary">
+  <main class="auth-shell d-flex align-items-center justify-content-center p-3">
     <section class="card border-0 shadow-sm w-100 auth-card">
       <div class="card-body p-4">
         <div class="auth-logo-line">

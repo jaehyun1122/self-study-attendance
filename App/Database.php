@@ -7,14 +7,13 @@ namespace App;
 use PDO;
 use RuntimeException;
 
+require_once __DIR__ . '/Config.php';
+
 final class Database
 {
     private ?PDO $pdo = null;
 
-    /**
-     * @param array<string, mixed> $config
-     */
-    public function __construct(private readonly array $config)
+    public function __construct(private readonly Config $config)
     {
     }
 
@@ -28,7 +27,7 @@ final class Database
             throw new RuntimeException('pdo_sqlite 확장이 필요합니다.');
         }
 
-        $databasePath = $this->string('database_path');
+        $databasePath = $this->config->string('database_path');
         $directory = dirname($databasePath);
 
         if (!is_dir($directory) && !mkdir($directory, 0775, true) && !is_dir($directory)) {
@@ -50,20 +49,5 @@ final class Database
         $this->pdo->exec('PRAGMA synchronous = NORMAL');
 
         return $this->pdo;
-    }
-
-    private function string(string $key, string $default = ''): string
-    {
-        $value = $this->config;
-
-        foreach (explode('.', $key) as $segment) {
-            if (!is_array($value) || !array_key_exists($segment, $value)) {
-                return $default;
-            }
-
-            $value = $value[$segment];
-        }
-
-        return is_scalar($value) ? (string) $value : $default;
     }
 }

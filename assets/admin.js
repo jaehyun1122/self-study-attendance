@@ -22,6 +22,17 @@
 
   let summaryServerTime = null;
   let summaryClockTimer = null;
+  const adminNavbar = document.getElementById('adminNavbar');
+  const adminMenuToggle = document.querySelector('[data-admin-menu-toggle]');
+
+  if (adminNavbar && adminMenuToggle) {
+    adminNavbar.addEventListener('show.bs.collapse', () => {
+      adminMenuToggle.setAttribute('aria-label', '메뉴 닫기');
+    });
+    adminNavbar.addEventListener('hide.bs.collapse', () => {
+      adminMenuToggle.setAttribute('aria-label', '메뉴 열기');
+    });
+  }
 
   try {
     localStorage.removeItem('admin_token');
@@ -286,6 +297,35 @@
       gray: '#adb5bd',
       teal: '#20c997',
     };
+    const chartThemeColors = () => {
+      const styles = getComputedStyle(document.documentElement);
+      return {
+        muted: styles.getPropertyValue('--app-muted').trim() || '#68776f',
+        grid: styles.getPropertyValue('--app-border').trim() || 'rgba(104, 119, 111, 0.12)',
+      };
+    };
+    const syncChartTheme = () => {
+      if (typeof window.Chart === 'undefined') {
+        return;
+      }
+
+      const colors = chartThemeColors();
+      window.Chart.defaults.color = colors.muted;
+
+      Object.values(charts).forEach((chart) => {
+        Object.values(chart.options.scales || {}).forEach((scale) => {
+          if (scale.ticks) scale.ticks.color = colors.muted;
+          if (scale.grid && scale.grid.display !== false) scale.grid.color = colors.grid;
+        });
+
+        const legendLabels = chart.options.plugins?.legend?.labels;
+        if (legendLabels) {
+          legendLabels.color = colors.muted;
+        }
+
+        chart.update();
+      });
+    };
     const emptyChartPlugin = {
       id: 'emptyChart',
       afterDraw(chart) {
@@ -341,18 +381,20 @@
     }
 
     function commonScales(percent = false) {
+      const colors = chartThemeColors();
+
       return {
         x: {
           grid: { display: false },
-          ticks: { color: '#68776f', maxRotation: 0 },
+          ticks: { color: colors.muted, maxRotation: 0 },
         },
         y: {
           beginAtZero: true,
           suggestedMax: percent ? 100 : undefined,
           max: percent ? 100 : undefined,
-          grid: { color: 'rgba(104, 119, 111, 0.12)' },
+          grid: { color: colors.grid },
           ticks: {
-            color: '#68776f',
+            color: colors.muted,
             callback: percent ? (value) => `${value}%` : undefined,
             precision: percent ? undefined : 0,
           },
@@ -468,7 +510,7 @@
           plugins: {
             legend: {
               position: 'bottom',
-              labels: { usePointStyle: true, boxWidth: 8 },
+              labels: { color: chartThemeColors().muted, usePointStyle: true, boxWidth: 8 },
             },
           },
         },
@@ -542,6 +584,8 @@
       }
     }
 
+    syncChartTheme();
+    document.addEventListener('attendance:theme-change', syncChartTheme);
     loadSummary();
     if (Number.isFinite(autoRefreshSeconds) && autoRefreshSeconds > 0) {
       setInterval(() => {

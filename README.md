@@ -4,7 +4,7 @@ PHP와 SQLite로 동작하는 학교 자습 출석 관리 시스템입니다.
 학생은 학번과 이름으로 출석하고, 관리자는 출석 기록과 위치 인증,
 로그인 세션 및 시스템 업데이트를 관리할 수 있습니다.
 
-- 현재 버전: `v1.9.9`
+- 현재 버전: `v2.0.0`
 - 저장소:
   [jaehyun1122/self-study-attendance](https://github.com/jaehyun1122/self-study-attendance)
 - 라이선스: MIT
@@ -243,8 +243,10 @@ php cli/reset-admin-password.php
 .htaccess
 
 App/
+  Config.php
   Controller.php
   Database.php
+  SchemaManager.php
 
 admin/
   index.php
@@ -262,14 +264,19 @@ api/
   admin-*.php
 
 assets/
+  admin-common.css
+  admin-login.css
+  admin.css
+  app.css
+  install.css
+  public.css
+  styles.css
   app.js
   admin.js
   admin-login.js
   attendance-location.js
   install.js
   public-utils.js
-  public.css
-  styles.css
 
 cli/
   reset-admin-password.php
