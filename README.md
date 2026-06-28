@@ -4,7 +4,7 @@ PHP와 SQLite로 동작하는 학교 자습 출석 관리 시스템입니다.
 학생은 학번과 이름으로 출석하고, 관리자는 출석 기록과 위치 인증,
 로그인 세션 및 시스템 업데이트를 관리할 수 있습니다.
 
-- 현재 버전: `v1.9.5`
+- 현재 버전: `v1.9.6`
 - 저장소:
   [jaehyun1122/self-study-attendance](https://github.com/jaehyun1122/self-study-attendance)
 - 라이선스: MIT
@@ -81,6 +81,7 @@ Nginx에서는 PHP-FPM 연결 외에 `data/`, `App/`, `templates/`, `cli/`와
 - `developer_name`: 관리자 화면에 표시할 개발자 또는 운영자 이름
 - `powered_by_url`: 개발자 또는 프로젝트 링크
 - `timezone`: 날짜와 시간을 계산할 기본 시간대
+- `auto_refresh_seconds`: 출석 화면 상태·서버 시간·위치 사용 여부와 관리자 화면 데이터의 자동 갱신 주기(초), `0`이면 자동 갱신 안 함
 
 ### 업데이트
 

@@ -1,5 +1,6 @@
 (function () {
   const STORAGE_KEY = 'attendance_student';
+  const autoRefreshSeconds = Number.parseInt(document.body.dataset.autoRefreshSeconds || '0', 10);
   const {
     api,
     formatDateTime,
@@ -425,5 +426,12 @@
 
   initPasswordToggles(document);
   loadStatus(false);
+  if (Number.isFinite(autoRefreshSeconds) && autoRefreshSeconds > 0) {
+    setInterval(() => {
+      if (!document.hidden) {
+        loadStatus(false);
+      }
+    }, autoRefreshSeconds * 1000);
+  }
   render();
 })();

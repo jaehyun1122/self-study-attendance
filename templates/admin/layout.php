@@ -14,7 +14,7 @@
   <?php endif; ?>
   <link rel="stylesheet" href="<?php echo $h($asset('/assets/styles.css')); ?>">
 </head>
-<body class="bg-body-tertiary">
+<body class="bg-body-tertiary" data-auto-refresh-seconds="<?php echo $h((string) max(0, min(86400, $app->int('auto_refresh_seconds', 5)))); ?>">
   <nav class="navbar navbar-expand-lg bg-white border-bottom sticky-top d-lg-none">
     <div class="container py-2">
       <a class="navbar-brand admin-brand-inline text-success" href="/admin/dash.php">
@@ -51,15 +51,10 @@
   <div class="admin-layout">
     <aside class="admin-sidebar d-none d-lg-flex">
       <div>
-        <div class="admin-sidebar-header">
-          <a class="admin-brand" href="/admin/dash.php">
-            <img class="brand-logo" src="<?php echo $h($asset('/assets/logo.png')); ?>" width="24" height="24" alt="" aria-hidden="true">
-            <span><?php echo $h($app->string('app_name')); ?></span>
-          </a>
-          <button class="theme-toggle-button" type="button" data-theme-toggle aria-label="현재 테마: 시스템. 밝게 모드로 전환" title="현재 테마: 시스템. 밝게 모드로 전환">
-            <i class="bi bi-circle-half"></i>
-          </button>
-        </div>
+        <a class="admin-brand" href="/admin/dash.php">
+          <img class="brand-logo" src="<?php echo $h($asset('/assets/logo.png')); ?>" width="24" height="24" alt="" aria-hidden="true">
+          <span><?php echo $h($app->string('app_name')); ?></span>
+        </a>
         <nav class="admin-menu" aria-label="관리자 메뉴">
           <?php foreach ($menu as $item): ?>
             <a class="admin-menu-link <?php echo ($active ?? '') === $item['key'] ? 'is-active' : ''; ?>" href="<?php echo $h($item['url']); ?>">
@@ -74,9 +69,14 @@
         </nav>
       </div>
       <div class="admin-sidebar-footer">
-        <div class="admin-developer-meta">
-          <span>개발자: <a href="<?php echo $h($app->string('powered_by_url', $app->string('repository_url'))); ?>" target="_blank" rel="noopener noreferrer"><?php echo $h($app->string('developer_name', $app->string('powered_by'))); ?></a></span>
-          <span>현재 버전 <?php echo $h($app->string('app_version')); ?></span>
+        <div class="admin-sidebar-footer-meta">
+          <div class="admin-developer-meta">
+            <span>개발자: <a href="<?php echo $h($app->string('powered_by_url', $app->string('repository_url'))); ?>" target="_blank" rel="noopener noreferrer"><?php echo $h($app->string('developer_name', $app->string('powered_by'))); ?></a></span>
+            <span>현재 버전 <?php echo $h($app->string('app_version')); ?></span>
+          </div>
+          <button class="theme-toggle-button" type="button" data-theme-toggle aria-label="현재 테마: 시스템. 밝게 모드로 전환" title="현재 테마: 시스템. 밝게 모드로 전환">
+            <i class="bi bi-circle-half"></i>
+          </button>
         </div>
         <button class="btn btn-outline-secondary w-100 js-logout-button" type="button">
           <i class="bi bi-box-arrow-right me-1"></i> 로그아웃

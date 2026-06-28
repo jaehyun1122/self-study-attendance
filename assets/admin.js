@@ -3,6 +3,7 @@
   const FILTER_HISTORY_LIMIT = 30;
   const DEFAULT_MAP_CENTER = [37.5665, 126.9780];
   const path = window.location.pathname;
+  const autoRefreshSeconds = Number.parseInt(document.body.dataset.autoRefreshSeconds || '0', 10);
   const {
     formatDateTime,
     formatDateTimeText,
@@ -496,7 +497,7 @@
       });
     }
 
-    async function loadSummary() {
+    async function loadSummary(silent = false) {
       if (summaryRequestPending) {
         return;
       }
@@ -508,7 +509,9 @@
         if (!data) return;
 
         if (data.status !== 1) {
-          toast(data.msg || '대시보드 정보를 불러오지 못했습니다.', 'error');
+          if (!silent) {
+            toast(data.msg || '대시보드 정보를 불러오지 못했습니다.', 'error');
+          }
           return;
         }
 
@@ -531,13 +534,22 @@
         }
 
       } catch (error) {
-        toast('대시보드 정보를 불러오는 중 오류가 발생했습니다.', 'error');
+        if (!silent) {
+          toast('대시보드 정보를 불러오는 중 오류가 발생했습니다.', 'error');
+        }
       } finally {
         summaryRequestPending = false;
       }
     }
 
     loadSummary();
+    if (Number.isFinite(autoRefreshSeconds) && autoRefreshSeconds > 0) {
+      setInterval(() => {
+        if (!document.hidden) {
+          loadSummary(true);
+        }
+      }, autoRefreshSeconds * 1000);
+    }
   }
 
   function initList() {
@@ -2580,8 +2592,14 @@
     loadUpdateInfo(false);
     loadServerInfo();
     loadSessions();
-    setInterval(loadServerInfo, 5000);
-    setInterval(loadSessions, 5000);
+    if (Number.isFinite(autoRefreshSeconds) && autoRefreshSeconds > 0) {
+      setInterval(() => {
+        if (!document.hidden) {
+          loadServerInfo();
+          loadSessions();
+        }
+      }, autoRefreshSeconds * 1000);
+    }
   }
 
   function initPassword() {

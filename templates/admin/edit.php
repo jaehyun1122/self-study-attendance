@@ -135,8 +135,8 @@
       </div>
     </fieldset>
 
-    <div class="d-flex gap-2 mt-4">
-      <button class="btn btn-success px-4" id="saveEditButton" type="submit">저장</button>
+    <div class="edit-form-actions">
+      <button class="btn btn-success" id="saveEditButton" type="submit">저장</button>
       <a class="btn btn-outline-secondary" href="/admin/list.php">취소</a>
     </div>
   </form>

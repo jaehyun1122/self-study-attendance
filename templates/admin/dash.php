@@ -3,12 +3,12 @@
     <p class="section-kicker">Attendance Admin</p>
     <div class="dashboard-title-row">
       <h1>관리자 대시보드</h1>
-      <div class="dashboard-server-time">
-        <span>서버 시간</span>
-        <strong id="summaryServerTime">-</strong>
-      </div>
     </div>
     <p>출석 현황과 학년별 통계를 한눈에 확인합니다.</p>
+  </div>
+  <div class="dashboard-server-time">
+    <span>서버 시간</span>
+    <strong id="summaryServerTime">-</strong>
   </div>
 </div>
 

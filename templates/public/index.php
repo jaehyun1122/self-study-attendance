@@ -19,7 +19,7 @@
   <link rel="stylesheet" href="<?php echo $h($asset('/assets/styles.css')); ?>">
   <link rel="stylesheet" href="<?php echo $h($asset('/assets/public.css')); ?>">
 </head>
-<body class="attendance-body">
+<body class="attendance-body" data-auto-refresh-seconds="<?php echo $h((string) max(0, min(86400, $app->int('auto_refresh_seconds', 5)))); ?>">
   <main class="attendance-shell">
     <section class="attendance-panel" aria-live="polite">
       <header class="attendance-panel-header">
