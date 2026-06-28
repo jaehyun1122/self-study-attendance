@@ -15,7 +15,7 @@
 </head>
 <body class="auth-body bg-body-tertiary">
   <main class="auth-shell d-flex align-items-center justify-content-center p-3">
-    <section class="card border-0 shadow-sm w-100 auth-card">
+    <section class="card border-0 shadow-sm auth-card">
       <div class="card-body p-4">
         <div class="auth-logo-line">
           <img class="brand-logo" src="<?php echo $h($asset('/assets/logo.png')); ?>" width="24" height="24" alt="" aria-hidden="true">

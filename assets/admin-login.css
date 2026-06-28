@@ -1,7 +1,9 @@
 /* Administrator login page */
 
 .auth-card {
+  flex: 0 1 440px;
   width: min(100%, 440px);
+  max-width: 440px;
 }
 
 .auth-body,
