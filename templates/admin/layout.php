@@ -22,8 +22,8 @@
         <span><?php echo $h($app->string('app_name')); ?></span>
       </a>
       <div class="admin-mobile-actions">
-        <button class="theme-toggle-button" type="button" data-theme-toggle aria-label="다크 모드로 전환" title="다크 모드로 전환">
-          <i class="bi bi-moon-stars"></i>
+        <button class="theme-toggle-button" type="button" data-theme-toggle aria-label="현재 테마: 시스템. 밝게 모드로 전환" title="현재 테마: 시스템. 밝게 모드로 전환">
+          <i class="bi bi-circle-half"></i>
         </button>
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#adminNavbar" aria-controls="adminNavbar" aria-expanded="false" aria-label="메뉴 열기">
           <span class="navbar-toggler-icon"></span>
@@ -51,10 +51,15 @@
   <div class="admin-layout">
     <aside class="admin-sidebar d-none d-lg-flex">
       <div>
-        <a class="admin-brand" href="/admin/dash.php">
-          <img class="brand-logo" src="<?php echo $h($asset('/assets/logo.png')); ?>" width="24" height="24" alt="" aria-hidden="true">
-          <span><?php echo $h($app->string('app_name')); ?></span>
-        </a>
+        <div class="admin-sidebar-header">
+          <a class="admin-brand" href="/admin/dash.php">
+            <img class="brand-logo" src="<?php echo $h($asset('/assets/logo.png')); ?>" width="24" height="24" alt="" aria-hidden="true">
+            <span><?php echo $h($app->string('app_name')); ?></span>
+          </a>
+          <button class="theme-toggle-button" type="button" data-theme-toggle aria-label="현재 테마: 시스템. 밝게 모드로 전환" title="현재 테마: 시스템. 밝게 모드로 전환">
+            <i class="bi bi-circle-half"></i>
+          </button>
+        </div>
         <nav class="admin-menu" aria-label="관리자 메뉴">
           <?php foreach ($menu as $item): ?>
             <a class="admin-menu-link <?php echo ($active ?? '') === $item['key'] ? 'is-active' : ''; ?>" href="<?php echo $h($item['url']); ?>">
@@ -69,9 +74,6 @@
         </nav>
       </div>
       <div class="admin-sidebar-footer">
-        <button class="theme-toggle-button" type="button" data-theme-toggle aria-label="다크 모드로 전환" title="다크 모드로 전환">
-          <i class="bi bi-moon-stars"></i>
-        </button>
         <div class="admin-developer-meta">
           <span>개발자: <a href="<?php echo $h($app->string('powered_by_url', $app->string('repository_url'))); ?>" target="_blank" rel="noopener noreferrer"><?php echo $h($app->string('developer_name', $app->string('powered_by'))); ?></a></span>
           <span>현재 버전 <?php echo $h($app->string('app_version')); ?></span>

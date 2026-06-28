@@ -1,5 +1,12 @@
 (function () {
   const THEME_STORAGE_KEY = 'attendance_color_theme';
+  const THEME_ORDER = ['system', 'light', 'dark'];
+  const THEME_MEDIA_QUERY = window.matchMedia?.('(prefers-color-scheme: dark)');
+  const THEME_META = {
+    system: { label: '시스템', icon: 'bi bi-circle-half' },
+    light: { label: '밝게', icon: 'bi bi-sun' },
+    dark: { label: '다크', icon: 'bi bi-moon-stars' },
+  };
 
   function toast(message, type = 'success') {
     if (window.Toastify) {
@@ -110,17 +117,22 @@
   }
 
   function applyTheme(theme) {
-    const normalizedTheme = theme === 'dark' ? 'dark' : 'light';
-    document.documentElement.dataset.theme = normalizedTheme;
+    const normalizedTheme = THEME_ORDER.includes(theme) ? theme : 'system';
+    const resolvedTheme = normalizedTheme === 'system'
+      ? (THEME_MEDIA_QUERY?.matches ? 'dark' : 'light')
+      : normalizedTheme;
+    const nextTheme = THEME_ORDER[(THEME_ORDER.indexOf(normalizedTheme) + 1) % THEME_ORDER.length];
+
+    document.documentElement.dataset.theme = resolvedTheme;
+    document.documentElement.dataset.themePreference = normalizedTheme;
     document.querySelectorAll('[data-theme-toggle]').forEach((button) => {
-      const dark = normalizedTheme === 'dark';
       const icon = button.querySelector('i');
-      const label = dark ? '라이트 모드로 전환' : '다크 모드로 전환';
+      const label = `현재 테마: ${THEME_META[normalizedTheme].label}. ${THEME_META[nextTheme].label} 모드로 전환`;
 
       button.setAttribute('aria-label', label);
       button.setAttribute('title', label);
       if (icon) {
-        icon.className = dark ? 'bi bi-sun' : 'bi bi-moon-stars';
+        icon.className = THEME_META[normalizedTheme].icon;
       }
     });
   }
@@ -134,14 +146,13 @@
       savedTheme = '';
     }
 
-    const preferredTheme = savedTheme === 'dark' || savedTheme === 'light'
-      ? savedTheme
-      : (window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    const preferredTheme = THEME_ORDER.includes(savedTheme) ? savedTheme : 'system';
     applyTheme(preferredTheme);
 
     root.querySelectorAll('[data-theme-toggle]').forEach((button) => {
       button.addEventListener('click', () => {
-        const nextTheme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+        const currentTheme = document.documentElement.dataset.themePreference || 'system';
+        const nextTheme = THEME_ORDER[(THEME_ORDER.indexOf(currentTheme) + 1) % THEME_ORDER.length];
 
         try {
           localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
@@ -152,6 +163,18 @@
         applyTheme(nextTheme);
       });
     });
+
+    const syncSystemTheme = () => {
+      if (document.documentElement.dataset.themePreference === 'system') {
+        applyTheme('system');
+      }
+    };
+
+    if (THEME_MEDIA_QUERY?.addEventListener) {
+      THEME_MEDIA_QUERY.addEventListener('change', syncSystemTheme);
+    } else {
+      THEME_MEDIA_QUERY?.addListener(syncSystemTheme);
+    }
   }
 
   function parseServerTime(value) {

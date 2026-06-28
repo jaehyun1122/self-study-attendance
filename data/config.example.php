@@ -5,7 +5,7 @@ declare(strict_types=1);
 return [
     // 기본 정보
     'app_name' => '자습 출결 체크', // 화면에 표시할 서비스 이름
-    'app_version' => 'v1.9.4', // 현재 설치된 앱 버전
+    'app_version' => 'v1.9.5', // 현재 설치된 앱 버전
     'developer_name' => '정재현', // 관리자 화면 하단에 표시할 개발자/운영자 이름
     'powered_by_url' => 'https://github.com/jaehyun1122/self-study-attendance', // 개발자 이름에 연결할 주소
     'timezone' => 'Asia/Seoul', // 날짜와 시간을 계산할 기본 시간대

@@ -14,15 +14,15 @@
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --app-bg: #0f1713;
-  --app-surface: #17221c;
-  --app-soft: #203329;
-  --app-border: #33483d;
-  --app-text: #edf5f0;
-  --app-muted: #a7b8ae;
-  --app-primary: #4cc38a;
+  --app-bg: #000000;
+  --app-surface: #121212;
+  --app-soft: #1c1c1c;
+  --app-border: #343434;
+  --app-text: #f3f3f3;
+  --app-muted: #aaaaaa;
+  --app-primary: #45c486;
   --app-danger: #ff7885;
-  --app-shadow: 0 18px 48px rgba(0, 0, 0, 0.34);
+  --app-shadow: 0 18px 48px rgba(0, 0, 0, 0.58);
 }
 
 body {
@@ -349,12 +349,26 @@ body {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 32px;
+  min-width: 0;
   color: var(--app-text);
   font-size: 1.14rem;
   font-weight: 850;
   line-height: 1.18;
   text-decoration: none;
+}
+
+.admin-sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 32px;
+}
+
+.admin-sidebar-header .theme-toggle-button {
+  width: 36px;
+  height: 36px;
+  flex-basis: 36px;
 }
 
 .admin-brand-inline {
@@ -659,14 +673,11 @@ body {
   gap: 16px;
 }
 
-.admin-sidebar-footer .theme-toggle-button {
-  justify-self: end;
-}
-
 .admin-mobile-actions {
   display: flex;
   align-items: center;
   gap: 8px;
+  margin-left: auto;
 }
 
 .admin-developer-meta {
@@ -1849,7 +1860,7 @@ body {
   --bs-table-bg: transparent;
   --bs-table-border-color: var(--app-border);
   --bs-table-hover-color: var(--app-text);
-  --bs-table-hover-bg: rgba(76, 195, 138, 0.08);
+  --bs-table-hover-bg: rgba(255, 255, 255, 0.06);
 }
 
 :root[data-theme="dark"] .admin-table tbody td,
@@ -1861,20 +1872,20 @@ body {
 :root[data-theme="dark"] .form-control,
 :root[data-theme="dark"] .form-select {
   border-color: var(--app-border);
-  background-color: #111b16;
+  background-color: #0d0d0d;
   color: var(--app-text);
 }
 
 :root[data-theme="dark"] .form-control::placeholder {
-  color: #778a7f;
+  color: #858585;
 }
 
 :root[data-theme="dark"] .form-control:focus,
 :root[data-theme="dark"] .form-select:focus {
   border-color: var(--app-primary);
-  background-color: #111b16;
+  background-color: #0d0d0d;
   color: var(--app-text);
-  box-shadow: 0 0 0 0.2rem rgba(76, 195, 138, 0.16);
+  box-shadow: 0 0 0 0.2rem rgba(69, 196, 134, 0.16);
 }
 
 :root[data-theme="dark"] .text-secondary,
@@ -1883,8 +1894,8 @@ body {
 }
 
 :root[data-theme="dark"] .btn-outline-secondary {
-  border-color: #607369;
-  color: #c7d4cc;
+  border-color: #666666;
+  color: #d0d0d0;
 }
 
 :root[data-theme="dark"] .navbar-toggler {

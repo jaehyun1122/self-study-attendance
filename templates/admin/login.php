@@ -12,8 +12,8 @@
   <link rel="stylesheet" href="<?php echo $h($asset('/assets/styles.css')); ?>">
 </head>
 <body class="bg-body-tertiary">
-  <button class="theme-toggle-button page-theme-toggle" type="button" data-theme-toggle aria-label="다크 모드로 전환" title="다크 모드로 전환">
-    <i class="bi bi-moon-stars"></i>
+  <button class="theme-toggle-button page-theme-toggle" type="button" data-theme-toggle aria-label="현재 테마: 시스템. 밝게 모드로 전환" title="현재 테마: 시스템. 밝게 모드로 전환">
+    <i class="bi bi-circle-half"></i>
   </button>
   <main class="min-vh-100 d-flex align-items-center justify-content-center p-3">
     <section class="card border-0 shadow-sm w-100 auth-card">

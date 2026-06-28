@@ -25,9 +25,16 @@
   box-shadow: var(--app-shadow);
 }
 
+:root[data-theme="dark"] .attendance-body {
+  background:
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.055), transparent 34%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.035), transparent 42%),
+    var(--app-bg);
+}
+
 :root[data-theme="dark"] .attendance-panel,
 :root[data-theme="dark"] .student-edit-dialog {
-  background: rgba(23, 34, 28, 0.97);
+  background: rgba(18, 18, 18, 0.98);
   color: var(--app-text);
 }
 
@@ -66,7 +73,7 @@
 .attendance-panel-tools {
   display: flex;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: flex-end;
   gap: 10px;
   flex-wrap: wrap;
 }
@@ -74,12 +81,12 @@
 .attendance-clock {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  justify-content: flex-end;
+  gap: 8px;
   width: fit-content;
-  padding: 12px 14px;
-  border: 1px solid var(--app-border);
-  border-radius: 8px;
-  background: var(--app-soft);
+  padding: 0;
+  border: 0;
+  background: transparent;
   color: var(--app-muted);
   font-weight: 700;
 }
@@ -303,16 +310,16 @@
 
   .attendance-panel-tools {
     width: 100%;
-    align-items: stretch;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
+    align-items: center;
+    justify-content: flex-end;
+    display: flex;
   }
 
   .attendance-clock {
-    width: min(100%, 100%);
-    justify-content: center;
-    flex: 1 1 auto;
-    padding: 10px 12px;
+    width: auto;
+    justify-content: flex-end;
+    flex: 0 1 auto;
+    padding: 0;
     font-size: 0.84rem;
   }
 
