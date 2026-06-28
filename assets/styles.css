@@ -126,17 +126,6 @@ body {
   color: var(--app-primary);
 }
 
-.page-theme-toggle {
-  position: fixed;
-  top: 18px;
-  right: 18px;
-  z-index: 20;
-}
-
-.public-logo-line .theme-toggle-button {
-  margin-left: auto;
-}
-
 .auth-logo-line .brand-logo,
 .admin-brand .brand-logo,
 .admin-brand-inline .brand-logo {
@@ -157,6 +146,24 @@ body {
 .auth-card h1 {
   font-size: 1.9rem;
   font-weight: 850;
+}
+
+.auth-title-line {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  margin-bottom: 0.5rem;
+}
+
+.auth-title-line h1 {
+  min-width: 0;
+  margin: 0;
+  white-space: nowrap;
+}
+
+.auth-title-line .theme-toggle-button {
+  margin-left: auto;
 }
 
 .small-note {
@@ -1756,13 +1763,8 @@ body {
     word-break: keep-all;
   }
 
-  .page-theme-toggle {
-    top: 12px;
-    right: 12px;
-  }
-
-  .page-theme-toggle + main {
-    padding-top: 4.5rem !important;
+  .auth-title-line h1 {
+    font-size: clamp(1.45rem, 7vw, 1.9rem);
   }
 
   .brand-logo {

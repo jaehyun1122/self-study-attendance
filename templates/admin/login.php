@@ -12,9 +12,6 @@
   <link rel="stylesheet" href="<?php echo $h($asset('/assets/styles.css')); ?>">
 </head>
 <body class="bg-body-tertiary">
-  <button class="theme-toggle-button page-theme-toggle" type="button" data-theme-toggle aria-label="현재 테마: 시스템. 밝게 모드로 전환" title="현재 테마: 시스템. 밝게 모드로 전환">
-    <i class="bi bi-circle-half"></i>
-  </button>
   <main class="min-vh-100 d-flex align-items-center justify-content-center p-3">
     <section class="card border-0 shadow-sm w-100 auth-card">
       <div class="card-body p-4">
@@ -22,7 +19,12 @@
           <img class="brand-logo" src="<?php echo $h($asset('/assets/logo.png')); ?>" width="24" height="24" alt="" aria-hidden="true">
           <p class="text-success fw-bold text-uppercase small mb-0">Admin</p>
         </div>
-        <h1 class="h3 mb-2">관리자 로그인</h1>
+        <div class="auth-title-line">
+          <h1 class="h3">관리자 로그인</h1>
+          <button class="theme-toggle-button" type="button" data-theme-toggle aria-label="현재 테마: 시스템. 밝게 모드로 전환" title="현재 테마: 시스템. 밝게 모드로 전환">
+            <i class="bi bi-circle-half"></i>
+          </button>
+        </div>
         <p class="text-secondary">관리자 비밀번호를 입력해주세요.</p>
 
         <form id="adminLoginForm">

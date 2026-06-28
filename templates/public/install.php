@@ -23,12 +23,14 @@
           <img class="brand-logo" src="<?php echo $h($asset('/assets/logo.png')); ?>" width="24" height="24" alt="" aria-hidden="true">
           <span class="section-kicker">Self Study Attendance</span>
           <span class="app-version"><?php echo $h($app->string('app_version')); ?></span>
-          <button class="theme-toggle-button" type="button" data-theme-toggle aria-label="현재 테마: 시스템. 밝게 모드로 전환" title="현재 테마: 시스템. 밝게 모드로 전환">
-            <i class="bi bi-circle-half"></i>
-          </button>
         </div>
         <div class="attendance-heading-copy">
-          <h1>초기 설치</h1>
+          <div class="attendance-title-line">
+            <h1>초기 설치</h1>
+            <button class="theme-toggle-button" type="button" data-theme-toggle aria-label="현재 테마: 시스템. 밝게 모드로 전환" title="현재 테마: 시스템. 밝게 모드로 전환">
+              <i class="bi bi-circle-half"></i>
+            </button>
+          </div>
           <p>출석 시스템을 처음 사용할 수 있도록 데이터베이스와 관리자 계정을 준비합니다.</p>
         </div>
       </header>
