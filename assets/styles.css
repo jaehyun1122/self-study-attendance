@@ -74,7 +74,12 @@ body {
 }
 
 .auth-logo-line {
+  width: 100%;
   margin-bottom: 14px;
+}
+
+.auth-logo-line .theme-toggle-button {
+  margin-left: auto;
 }
 
 .public-logo-line {
@@ -146,24 +151,6 @@ body {
 .auth-card h1 {
   font-size: 1.9rem;
   font-weight: 850;
-}
-
-.auth-title-line {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  margin-bottom: 0.5rem;
-}
-
-.auth-title-line h1 {
-  min-width: 0;
-  margin: 0;
-  white-space: nowrap;
-}
-
-.auth-title-line .theme-toggle-button {
-  margin-left: auto;
 }
 
 .small-note {
@@ -1763,7 +1750,7 @@ body {
     word-break: keep-all;
   }
 
-  .auth-title-line h1 {
+  .auth-card h1 {
     font-size: clamp(1.45rem, 7vw, 1.9rem);
   }
 
