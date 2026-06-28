@@ -14,7 +14,6 @@ try {
 
     $input = $app->jsonInput();
     $app->requireFields($input, ['old_password', 'new_password']);
-    $app->enforceAuthRateLimit('admin-sensitive');
 
     $newPassword = trim((string) $input['new_password']);
     $passwordRange = $app->lengthRange('password_length', 4, 32);
@@ -24,14 +23,12 @@ try {
         $app->error($app->lengthRequirementText('새 비밀번호는', 'password_length', 4, 32), 400);
     }
 
-    $admin = $app->pdo()->query('SELECT id, password_hash FROM admin ORDER BY id ASC LIMIT 1')->fetch();
+    $app->verifyAdminPassword($input['old_password'], 400);
+    $admin = $app->pdo()->query('SELECT id FROM admin ORDER BY id ASC LIMIT 1')->fetch();
 
-    if (!$admin || !password_verify((string) $input['old_password'], (string) $admin['password_hash'])) {
-        $app->recordAuthFailure('admin-sensitive');
-        $app->error('기존 비밀번호가 올바르지 않습니다.', 400);
+    if (!$admin) {
+        $app->error('관리자 계정을 찾을 수 없습니다.', 404);
     }
-
-    $app->clearAuthFailures('admin-sensitive');
     $pdo = $app->pdo();
     $pdo->beginTransaction();
 

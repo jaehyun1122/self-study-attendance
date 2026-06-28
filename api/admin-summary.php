@@ -139,7 +139,6 @@ try {
         'location_stats' => $locationStats,
         'hourly_stats' => $hourlyStats,
         'server_time' => $app->now(),
-        'server_time_sync_interval_seconds' => $app->int('server_time_sync_interval_seconds', 5),
     ]);
 } catch (Throwable $exception) {
     $app->failWithException('대시보드 정보를 불러오는 중 오류가 발생했습니다.', $exception);

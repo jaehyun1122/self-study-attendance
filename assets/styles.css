@@ -993,8 +993,7 @@ body {
 }
 
 .system-server-card {
-  width: calc((100% - 18px) / 2);
-  margin-top: 18px;
+  width: 100%;
 }
 
 .system-card-heading {
@@ -1240,15 +1239,14 @@ body {
 
 .session-list {
   display: grid;
-  gap: 8px;
+  gap: 6px;
+  max-height: 390px;
+  overflow-y: auto;
+  padding-right: 4px;
+  scrollbar-gutter: stable;
 }
 
 .session-item {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 16px;
-  align-items: center;
-  padding: 16px;
   border: 1px solid var(--app-border);
   border-radius: 8px;
   background: #fff;
@@ -1256,7 +1254,38 @@ body {
 
 .session-item.is-current {
   border-color: rgba(25, 135, 84, 0.32);
-  box-shadow: inset 3px 0 var(--app-primary);
+}
+
+.session-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.session-summary::-webkit-details-marker {
+  display: none;
+}
+
+.session-summary::after {
+  content: "⌄";
+  color: var(--app-muted);
+  font-size: 1rem;
+  transition: transform 0.18s ease;
+}
+
+.session-item[open] .session-summary::after {
+  transform: rotate(180deg);
+}
+
+.session-summary time {
+  margin-left: auto;
+  color: var(--app-muted);
+  font-size: 0.78rem;
+  white-space: nowrap;
 }
 
 .session-item-title {
@@ -1270,12 +1299,28 @@ body {
   color: var(--app-primary);
 }
 
+.session-item-title > span:not(.badge) {
+  display: grid;
+  gap: 1px;
+}
+
+.session-item-title small {
+  color: var(--app-muted);
+  font-size: 0.76rem;
+  font-weight: 650;
+}
+
+.session-details {
+  padding: 0 14px 14px;
+  border-top: 1px solid #edf1ef;
+}
+
 .session-user-agent {
   display: block;
   max-width: 100%;
-  margin-top: 6px;
+  margin-top: 10px;
   color: var(--app-muted);
-  font-size: 0.82rem;
+  font-size: 0.76rem;
   line-height: 1.45;
   overflow-wrap: anywhere;
 }
@@ -1290,9 +1335,8 @@ body {
 
 .session-meta div {
   min-width: 0;
-  padding: 9px 10px;
-  border-radius: 6px;
-  background: #f8fbf9;
+  padding: 10px 0;
+  border-bottom: 1px solid #edf1ef;
 }
 
 .session-meta dt {
@@ -1304,6 +1348,12 @@ body {
   margin: 0;
   font-weight: 750;
   overflow-wrap: anywhere;
+}
+
+.session-detail-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
 }
 
 .server-info-kv {
@@ -1589,10 +1639,21 @@ body {
   }
 
   .session-item {
-    grid-template-columns: 1fr;
+    display: block;
   }
 
-  .session-item > .btn {
+  .session-summary {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .session-summary time {
+    width: calc(100% - 22px);
+    margin-left: 0;
+    padding-left: 29px;
+  }
+
+  .session-detail-actions .btn {
     width: 100%;
   }
 

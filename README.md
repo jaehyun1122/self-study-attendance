@@ -4,7 +4,7 @@ PHP와 SQLite로 동작하는 학교 자습 출석 관리 시스템입니다.
 학생은 학번과 이름으로 출석하고, 관리자는 출석 기록과 위치 인증,
 로그인 세션 및 시스템 업데이트를 관리할 수 있습니다.
 
-- 현재 버전: `v1.9.2`
+- 현재 버전: `v1.9.3`
 - 저장소:
   [jaehyun1122/self-study-attendance](https://github.com/jaehyun1122/self-study-attendance)
 - 라이선스: MIT
@@ -55,41 +55,18 @@ php -S localhost:8000
 
 ### Apache
 
-프로젝트 루트의 단일 `.htaccess`는 디렉터리 목록을 비활성화하고 `data/`,
-`App/`, `templates/`, `cli/` 및 Git 메타데이터의 직접 접근을
-차단합니다.
+프로젝트 루트의 단일 `.htaccess`는 `data/`, `App/`, `templates/`,
+`cli/`, 숨김 경로 및 민감 파일의 직접 접근만 차단합니다.
 
 Apache 가상 호스트에서 프로젝트 루트를 `DocumentRoot`로 지정하고
 `.htaccess`를 읽을 수 있도록 `AllowOverride All`을 설정하세요.
 루트 접근 제어에는 `mod_rewrite`를 사용합니다.
 
-### Nginx와 리버스 프록시
+### Nginx
 
-`data/nginx.conf.example`에는 PHP-FPM 연결과 내부 디렉터리 접근 차단 예시가
-포함되어 있습니다. 실제 PHP-FPM 소켓과 서버 경로는 환경에 맞게
-변경하세요.
-
-Cloudflare 주황색 프록시 또는 다른 리버스 프록시를 사용하면 설정된
-헤더 순서대로 실제 접속 IP와 HTTPS 여부를 확인합니다. 기본 설정에는
-Cloudflare, Akamai, Fastly, Fly.io, AWS CloudFront, Azure Front Door,
-Nginx 및 표준 `Forwarded` 헤더가 포함되어 있습니다.
-
-```php
-'proxy_ip_headers' => [
-    'CF-Connecting-IP',
-    'True-Client-IP',
-    'Fastly-Client-IP',
-    'Fly-Client-IP',
-    'CloudFront-Viewer-Address',
-    'X-Azure-ClientIP',
-    'X-Real-IP',
-    'X-Forwarded-For',
-    'Forwarded',
-],
-```
-
-사용 중인 프록시가 다른 헤더를 전송한다면 `proxy_ip_headers` 또는
-`proxy_https_headers` 배열에 헤더 이름을 추가하면 됩니다.
+Nginx에서는 PHP-FPM 연결 외에 `data/`, `App/`, `templates/`, `cli/`와
+숨김 경로의 외부 접근을 서버 설정에서 반드시 차단하세요. PHP-FPM
+소켓과 프로젝트 루트는 배포 환경에 맞게 설정합니다.
 
 ## 설정
 
@@ -112,17 +89,14 @@ Nginx 및 표준 `Forwarded` 헤더가 포함되어 있습니다.
 ### 인증 및 입력 제한
 
 - `initial_admin_password`: 설치 마법사 승인 비밀번호
-- `token_expire_hours`: 관리자 로그인 세션 유지 시간
+- `token_expire_hours`: 관리자 페이지 이동 시 갱신되는 로그인 세션 유지 시간
 - `password_length`: 관리자 비밀번호 최소·최대 길이, 기본 4~32자
 - `auth_rate_limit`: 인증 실패 횟수, 계산 시간 및 차단 시간
-- `proxy_ip_headers`: 실제 접속 IP를 확인할 프록시 헤더 목록
-- `proxy_https_headers`: HTTPS 여부를 확인할 프록시 헤더 목록
 - `student_no_length`: 학번 최소·최대 길이
 - `student_name_length`: 학생 이름 최소·최대 길이
 
 ### 동기화 및 위치 인증
 
-- `server_time_sync_interval_seconds`: 화면과 서버 정보 동기화 간격
 - `attendance_location.enabled`: 위치 인증 사용 여부
 - `attendance_location.latitude`: 출석 가능 중심 위도
 - `attendance_location.longitude`: 출석 가능 중심 경도
@@ -296,7 +270,6 @@ cli/
 data/
   config.php
   config.example.php
-  nginx.conf.example
   schema.sql
   database.sqlite
 

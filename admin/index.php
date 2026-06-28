@@ -10,14 +10,16 @@ $app = new Controller();
 $token = $_COOKIE['admin_token'] ?? null;
 $reason = trim((string) ($_GET['reason'] ?? ''));
 
-if ($reason !== '') {
-    $app->clearAdminCookie();
-} elseif (is_string($token) && $token !== '') {
+if (is_string($token) && $token !== '') {
     if ($app->checkAdminToken($token)) {
         $app->redirect('/admin/dash.php');
     }
 
-    $app->redirect('/admin/?reason=' . rawurlencode($app->adminTokenFailureReason()));
+    $app->clearAdminCookie();
+
+    if ($reason === '') {
+        $app->redirect('/admin/?reason=' . rawurlencode($app->adminTokenFailureReason()));
+    }
 }
 
 echo $app->renderTemplate('admin/login.php');

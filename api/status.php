@@ -19,7 +19,6 @@ $location = $installed ? $app->publicLocationStatus() : [
 $status = [
     'installed' => $installed,
     'server_time' => $app->now(),
-    'server_time_sync_interval_seconds' => $app->int('server_time_sync_interval_seconds', 5),
     'location' => $location,
 ];
 

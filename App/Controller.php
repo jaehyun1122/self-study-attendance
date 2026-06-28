@@ -13,6 +13,7 @@ final class Controller
 {
     public const STATUS_SUCCESS = 1;
     public const STATUS_ERROR = 2;
+    private const SCHEMA_VERSION = 10903;
 
     /** @var array<string, mixed> */
     private array $config;
@@ -363,12 +364,16 @@ final class Controller
         header('Content-Type: application/json; charset=utf-8');
         header('Cache-Control: no-store');
 
-        echo json_encode([
+        $payload = [
             'status' => $status,
             'msg' => $message,
-            'time' => $this->now(),
-            'result' => $result,
-        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        ];
+
+        if ($result !== null) {
+            $payload['result'] = $result;
+        }
+
+        echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         exit;
     }
 
@@ -377,7 +382,19 @@ final class Controller
      */
     public function jsonInput(): array
     {
-        $raw = trim((string) file_get_contents('php://input'));
+        $contentLength = $_SERVER['CONTENT_LENGTH'] ?? null;
+
+        if (is_numeric($contentLength) && (int) $contentLength > 65536) {
+            $this->error('요청 본문이 너무 큽니다.', 413);
+        }
+
+        $raw = (string) file_get_contents('php://input');
+
+        if (strlen($raw) > 65536) {
+            $this->error('요청 본문이 너무 큽니다.', 413);
+        }
+
+        $raw = trim($raw);
 
         if ($raw === '') {
             return [];
@@ -400,8 +417,15 @@ final class Controller
 
     public function requireMethod(string $method): void
     {
-        if (strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET')) !== strtoupper($method)) {
+        $expectedMethod = strtoupper($method);
+        $actualMethod = strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET'));
+
+        if ($actualMethod !== $expectedMethod) {
             $this->error('허용되지 않은 요청 방식입니다.', 405);
+        }
+
+        if ($expectedMethod !== 'GET' && strtolower($this->serverHeaderValue('Sec-Fetch-Site')) === 'cross-site') {
+            $this->error('교차 사이트 요청은 허용하지 않습니다.', 403);
         }
     }
 
@@ -412,7 +436,9 @@ final class Controller
     public function requireFields(array $input, array $fields): void
     {
         foreach ($fields as $field) {
-            if (!isset($input[$field]) || trim((string) $input[$field]) === '') {
+            $value = $input[$field] ?? null;
+
+            if ((!is_string($value) && !is_numeric($value)) || trim((string) $value) === '') {
                 $this->error('필수 입력값이 누락되었습니다: ' . $field, 400);
             }
         }
@@ -449,84 +475,74 @@ final class Controller
         }
     }
 
-    public function checkAdminToken(string $token, bool $active = true): bool
+    public function checkAdminToken(string $token, bool $refresh = true): bool
     {
         if ($token === '') {
             return false;
         }
 
-        try {
-            $this->migrateInstalledDatabase();
-            $now = $this->now();
-            $statement = $this->pdo()->prepare(
-                'SELECT id, expired_at FROM admin_tokens WHERE token = :token'
-            );
-            $statement->execute([
-                ':token' => $this->hashToken($token),
-            ]);
-            $session = $statement->fetch();
+        $this->migrateInstalledDatabase();
+        $nowDateTime = new \DateTimeImmutable('now');
+        $now = $nowDateTime->format('Y-m-d H:i:s');
+        $statement = $this->pdo()->prepare(
+            'SELECT id, expired_at FROM admin_tokens WHERE token = :token'
+        );
+        $statement->execute([
+            ':token' => $this->hashToken($token),
+        ]);
+        $session = $statement->fetch();
 
-            if (!is_array($session) || !is_numeric($session['id'] ?? null)) {
-                $this->adminTokenFailureReason = 'session-revoked';
-                return false;
-            }
+        if (!is_array($session) || !is_numeric($session['id'] ?? null)) {
+            $this->adminTokenFailureReason = 'session-revoked';
+            return false;
+        }
 
-            $expiresAt = new \DateTimeImmutable((string) $session['expired_at']);
-            $nowDateTime = new \DateTimeImmutable($now);
+        $expiresAt = $this->dateTimeOrNull($session['expired_at'] ?? null);
 
-            if ($expiresAt->getTimestamp() <= $nowDateTime->getTimestamp()) {
+        if ($expiresAt === null || $expiresAt <= $nowDateTime) {
+            try {
                 $delete = $this->pdo()->prepare('DELETE FROM admin_tokens WHERE id = :id');
                 $delete->execute([':id' => (int) $session['id']]);
-                $this->adminTokenFailureReason = 'session-expired';
-
-                return false;
+            } catch (Throwable) {
+                // 만료 판정은 이미 끝났으므로 잠금 중 정리 실패가 응답을 막지 않게 합니다.
             }
 
-            if ($active) {
-                $remainingSeconds = $expiresAt->getTimestamp() - $nowDateTime->getTimestamp();
-                $extendThresholdSeconds = 3 * 60 * 60;
-
-                if ($remainingSeconds <= $extendThresholdSeconds) {
-                    $sessionHours = max(1, $this->int('token_expire_hours', 12));
-                    $expiresAt = $nowDateTime->modify("+{$sessionHours} hours");
-                    $touch = $this->pdo()->prepare(
-                        'UPDATE admin_tokens
-                         SET last_seen_at = :last_seen_at, expired_at = :expired_at
-                         WHERE id = :id'
-                    );
-                    $touch->execute([
-                        ':last_seen_at' => $now,
-                        ':expired_at' => $expiresAt->format('Y-m-d H:i:s'),
-                        ':id' => (int) $session['id'],
-                    ]);
-                    $this->setAdminCookie($token, $expiresAt->getTimestamp());
-                } else {
-                    $touch = $this->pdo()->prepare(
-                        'UPDATE admin_tokens SET last_seen_at = :last_seen_at WHERE id = :id'
-                    );
-                    $touch->execute([
-                        ':last_seen_at' => $now,
-                        ':id' => (int) $session['id'],
-                    ]);
-                }
-            }
-
-            $this->adminTokenFailureReason = '';
-
-            return true;
-        } catch (Throwable) {
             $this->adminTokenFailureReason = 'session-expired';
             return false;
         }
+
+        if ($refresh) {
+            $sessionHours = max(1, $this->int('token_expire_hours', 12));
+            $newExpiresAt = $nowDateTime->modify("+{$sessionHours} hours");
+
+            try {
+                $touch = $this->pdo()->prepare(
+                    'UPDATE admin_tokens
+                     SET last_seen_at = :last_seen_at, expired_at = :expired_at
+                     WHERE id = :id'
+                );
+                $touch->execute([
+                    ':last_seen_at' => $now,
+                    ':expired_at' => $newExpiresAt->format('Y-m-d H:i:s'),
+                    ':id' => (int) $session['id'],
+                ]);
+                $this->setAdminCookie($token, $newExpiresAt->getTimestamp());
+            } catch (Throwable $exception) {
+                error_log('Admin session refresh skipped: ' . $exception->getMessage());
+            }
+        }
+
+        $this->adminTokenFailureReason = '';
+
+        return true;
     }
 
     public function requireAdminApi(): string
     {
         $this->requireInstalled();
         $cookieToken = $_COOKIE['admin_token'] ?? null;
-        $isActive = $this->isAdminActivityRequest();
 
-        if (is_string($cookieToken) && $this->checkAdminToken($cookieToken, $isActive)) {
+        if (is_string($cookieToken) && $this->checkAdminToken($cookieToken, false)) {
             return $cookieToken;
         }
 
@@ -537,6 +553,7 @@ final class Controller
 
     public function requireAdminPage(): string
     {
+        header('Cache-Control: no-store, private');
         $cookieName = 'admin_token';
         $token = $_COOKIE[$cookieName] ?? null;
 
@@ -549,11 +566,6 @@ final class Controller
         }
 
         return $token;
-    }
-
-    private function isAdminActivityRequest(): bool
-    {
-        return ($_SERVER['HTTP_X_ADMIN_ACTIVITY'] ?? '') === '1';
     }
 
     public function adminTokenFailureReason(): string
@@ -750,18 +762,6 @@ final class Controller
 
     public function clientIpAddress(): string
     {
-        foreach ($this->array('proxy_ip_headers', []) as $headerName) {
-            if (!is_string($headerName)) {
-                continue;
-            }
-
-            $address = $this->clientIpFromHeader($headerName, $this->serverHeaderValue($headerName));
-
-            if ($address !== null) {
-                return $address;
-            }
-        }
-
         $remoteAddress = trim((string) ($_SERVER['REMOTE_ADDR'] ?? ''));
 
         return filter_var($remoteAddress, FILTER_VALIDATE_IP) !== false ? $remoteAddress : 'unknown';
@@ -842,136 +842,120 @@ final class Controller
         }
 
         $pdo = $this->pdo();
-        $pdo->exec(
-            "CREATE TABLE IF NOT EXISTS app_settings (
-                setting_key TEXT PRIMARY KEY,
-                setting_value TEXT NOT NULL,
-                updated_at TEXT NOT NULL
-            )"
-        );
-        $pdo->exec(
-            "CREATE TABLE IF NOT EXISTS auth_rate_limits (
-                scope TEXT NOT NULL,
-                identifier TEXT NOT NULL,
-                attempts INTEGER NOT NULL DEFAULT 0,
-                window_started_at TEXT NOT NULL,
-                blocked_until TEXT,
-                updated_at TEXT NOT NULL,
-                PRIMARY KEY (scope, identifier)
-            )"
-        );
-        $pdo->exec('CREATE INDEX IF NOT EXISTS idx_auth_rate_limits_updated_at ON auth_rate_limits(updated_at)');
+        $version = (int) $pdo->query('PRAGMA user_version')->fetchColumn();
 
-        $hasAdminTokens = ((int) $pdo
-            ->query("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'admin_tokens'")
-            ->fetchColumn()) > 0;
-
-        if ($hasAdminTokens) {
-            $tokenColumns = [];
-            foreach ($pdo->query('PRAGMA table_info(admin_tokens)')->fetchAll() as $column) {
-                if (isset($column['name'])) {
-                    $tokenColumns[(string) $column['name']] = true;
-                }
-            }
-
-            $tokenColumnDefinitions = [
-                'last_seen_at' => 'last_seen_at TEXT',
-                'ip_address' => 'ip_address TEXT',
-                'user_agent' => 'user_agent TEXT',
-            ];
-
-            foreach ($tokenColumnDefinitions as $name => $definition) {
-                if (!isset($tokenColumns[$name])) {
-                    $pdo->exec("ALTER TABLE admin_tokens ADD COLUMN {$definition}");
-                }
-            }
-
-            $pdo->exec('CREATE INDEX IF NOT EXISTS idx_admin_tokens_expired_at ON admin_tokens(expired_at)');
-        }
-
-        $hasAttendance = ((int) $pdo
-            ->query("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'attendance'")
-            ->fetchColumn()) > 0;
-
-        if (!$hasAttendance) {
+        if ($version >= self::SCHEMA_VERSION) {
             $this->schemaReady = true;
             return;
         }
 
-        $columns = [];
-        foreach ($pdo->query('PRAGMA table_info(attendance)')->fetchAll() as $column) {
-            if (isset($column['name'])) {
-                $columns[(string) $column['name']] = true;
-            }
-        }
+        $pdo->exec('BEGIN IMMEDIATE');
 
-        $addColumn = static function (string $name, string $definition) use ($pdo, &$columns): void {
-            if (isset($columns[$name])) {
+        try {
+            $version = (int) $pdo->query('PRAGMA user_version')->fetchColumn();
+
+            if ($version >= self::SCHEMA_VERSION) {
+                $pdo->commit();
+                $this->schemaReady = true;
                 return;
             }
 
-            $pdo->exec("ALTER TABLE attendance ADD COLUMN {$definition}");
-            $columns[$name] = true;
-        };
+            $pdo->exec(
+                "CREATE TABLE IF NOT EXISTS app_settings (
+                    setting_key TEXT PRIMARY KEY,
+                    setting_value TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )"
+            );
+            $pdo->exec(
+                "CREATE TABLE IF NOT EXISTS auth_rate_limits (
+                    scope TEXT NOT NULL,
+                    identifier TEXT NOT NULL,
+                    attempts INTEGER NOT NULL DEFAULT 0,
+                    window_started_at TEXT NOT NULL,
+                    blocked_until TEXT,
+                    updated_at TEXT NOT NULL,
+                    PRIMARY KEY (scope, identifier)
+                )"
+            );
+            $pdo->exec('CREATE INDEX IF NOT EXISTS idx_auth_rate_limits_updated_at ON auth_rate_limits(updated_at)');
 
-        $addColumn('location_status', "location_status TEXT NOT NULL DEFAULT 'unchecked'");
-        $addColumn('location_latitude', 'location_latitude REAL');
-        $addColumn('location_longitude', 'location_longitude REAL');
-        $addColumn('location_accuracy', 'location_accuracy REAL');
-        $addColumn('location_distance_meters', 'location_distance_meters REAL');
-        $addColumn('location_message', 'location_message TEXT');
-        $addColumn('location_checked_at', 'location_checked_at TEXT');
-        $addColumn('location_approved_at', 'location_approved_at TEXT');
-        $pdo->exec('CREATE INDEX IF NOT EXISTS idx_attendance_attend_date ON attendance(attend_date)');
-        $pdo->exec('CREATE INDEX IF NOT EXISTS idx_attendance_location_status ON attendance(location_status)');
-        $pdo->exec('CREATE INDEX IF NOT EXISTS idx_attendance_created_at ON attendance(created_at)');
+            $hasAdminTokens = ((int) $pdo
+                ->query("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'admin_tokens'")
+                ->fetchColumn()) > 0;
 
-        $this->schemaReady = true;
+            if ($hasAdminTokens) {
+                $tokenColumns = [];
+                foreach ($pdo->query('PRAGMA table_info(admin_tokens)')->fetchAll() as $column) {
+                    if (isset($column['name'])) {
+                        $tokenColumns[(string) $column['name']] = true;
+                    }
+                }
+
+                $tokenColumnDefinitions = [
+                    'last_seen_at' => 'last_seen_at TEXT',
+                    'ip_address' => 'ip_address TEXT',
+                    'user_agent' => 'user_agent TEXT',
+                ];
+
+                foreach ($tokenColumnDefinitions as $name => $definition) {
+                    if (!isset($tokenColumns[$name])) {
+                        $pdo->exec("ALTER TABLE admin_tokens ADD COLUMN {$definition}");
+                    }
+                }
+
+                $pdo->exec('CREATE INDEX IF NOT EXISTS idx_admin_tokens_expired_at ON admin_tokens(expired_at)');
+            }
+
+            $hasAttendance = ((int) $pdo
+                ->query("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'attendance'")
+                ->fetchColumn()) > 0;
+
+            if ($hasAttendance) {
+                $columns = [];
+                foreach ($pdo->query('PRAGMA table_info(attendance)')->fetchAll() as $column) {
+                    if (isset($column['name'])) {
+                        $columns[(string) $column['name']] = true;
+                    }
+                }
+
+                $addColumn = static function (string $name, string $definition) use ($pdo, &$columns): void {
+                    if (isset($columns[$name])) {
+                        return;
+                    }
+
+                    $pdo->exec("ALTER TABLE attendance ADD COLUMN {$definition}");
+                    $columns[$name] = true;
+                };
+
+                $addColumn('location_status', "location_status TEXT NOT NULL DEFAULT 'unchecked'");
+                $addColumn('location_latitude', 'location_latitude REAL');
+                $addColumn('location_longitude', 'location_longitude REAL');
+                $addColumn('location_accuracy', 'location_accuracy REAL');
+                $addColumn('location_distance_meters', 'location_distance_meters REAL');
+                $addColumn('location_message', 'location_message TEXT');
+                $addColumn('location_checked_at', 'location_checked_at TEXT');
+                $addColumn('location_approved_at', 'location_approved_at TEXT');
+                $pdo->exec('CREATE INDEX IF NOT EXISTS idx_attendance_attend_date ON attendance(attend_date)');
+                $pdo->exec('CREATE INDEX IF NOT EXISTS idx_attendance_location_status ON attendance(location_status)');
+                $pdo->exec('CREATE INDEX IF NOT EXISTS idx_attendance_created_at ON attendance(created_at)');
+            }
+
+            $pdo->exec('PRAGMA user_version = ' . self::SCHEMA_VERSION);
+            $pdo->commit();
+            $this->schemaReady = true;
+        } catch (Throwable $exception) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+
+            throw $exception;
+        }
     }
 
     private function isHttps(): bool
     {
-        if (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== '' && $_SERVER['HTTPS'] !== 'off') {
-            return true;
-        }
-
-        foreach ($this->array('proxy_https_headers', []) as $headerName) {
-            if (!is_string($headerName)) {
-                continue;
-            }
-
-            $value = $this->serverHeaderValue($headerName);
-
-            if ($value === '') {
-                continue;
-            }
-
-            if (strcasecmp($headerName, 'CF-Visitor') === 0) {
-                $visitor = json_decode($value, true);
-
-                if (is_array($visitor) && strtolower((string) ($visitor['scheme'] ?? '')) === 'https') {
-                    return true;
-                }
-
-                continue;
-            }
-
-            if (strcasecmp($headerName, 'Forwarded') === 0) {
-                if (preg_match('/(?:^|[;,])\s*proto="?https"?(?:[;,]|$)/i', $value) === 1) {
-                    return true;
-                }
-
-                continue;
-            }
-
-            foreach (explode(',', strtolower($value)) as $item) {
-                if (in_array(trim($item), ['https', 'on', '1', '443', 'ssl'], true)) {
-                    return true;
-                }
-            }
-        }
-
-        return false;
+        return isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== '' && $_SERVER['HTTPS'] !== 'off';
     }
 
     private function sendSecurityHeaders(): void
@@ -990,58 +974,25 @@ final class Controller
     {
         $key = strtoupper(str_replace('-', '_', trim($headerName)));
         $serverKey = str_starts_with($key, 'HTTP_') ? $key : 'HTTP_' . $key;
+        $value = trim((string) ($_SERVER[$serverKey] ?? ''));
 
-        return trim((string) ($_SERVER[$serverKey] ?? ''));
-    }
-
-    private function clientIpFromHeader(string $headerName, string $value): ?string
-    {
-        if ($value === '') {
-            return null;
+        if ($value !== '' || !function_exists('getallheaders')) {
+            return $value;
         }
 
-        if (strcasecmp($headerName, 'Forwarded') === 0) {
-            preg_match_all(
-                '/(?:^|[,;])\s*for=(?:"([^"]+)"|([^,;\s]+))/i',
-                $value,
-                $matches,
-                PREG_SET_ORDER
-            );
+        $headers = getallheaders();
 
-            foreach ($matches as $match) {
-                $quoted = (string) ($match[1] ?? '');
-                $address = $this->normalizeProxyIp($quoted !== '' ? $quoted : (string) ($match[2] ?? ''));
-
-                if ($address !== null) {
-                    return $address;
-                }
-            }
-
-            return null;
+        if (!is_array($headers)) {
+            return '';
         }
 
-        foreach (explode(',', $value) as $candidate) {
-            $address = $this->normalizeProxyIp($candidate);
-
-            if ($address !== null) {
-                return $address;
+        foreach ($headers as $name => $headerValue) {
+            if (strcasecmp((string) $name, $headerName) === 0) {
+                return trim((string) $headerValue);
             }
         }
 
-        return null;
-    }
-
-    private function normalizeProxyIp(string $candidate): ?string
-    {
-        $value = trim($candidate, " \t\n\r\0\x0B\"'");
-
-        if (preg_match('/^\[([0-9a-f:.]+)\](?::\d+)?$/i', $value, $matches) === 1) {
-            $value = $matches[1];
-        } elseif (preg_match('/^(\d{1,3}(?:\.\d{1,3}){3}):\d+$/', $value, $matches) === 1) {
-            $value = $matches[1];
-        }
-
-        return filter_var($value, FILTER_VALIDATE_IP) !== false ? $value : null;
+        return '';
     }
 
     private function dateTimeOrNull(mixed $value): ?\DateTimeImmutable

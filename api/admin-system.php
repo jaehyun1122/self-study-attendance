@@ -38,7 +38,26 @@ try {
     }
 
     if ($type === 'update_check') {
-        $app->success('릴리즈 정보를 확인했습니다.', githubReleaseInfo($app));
+        $releaseInfo = githubReleaseInfo($app);
+        $publicRelease = static fn (array $release): array => [
+            'tag_name' => (string) ($release['tag_name'] ?? ''),
+            'name' => (string) ($release['name'] ?? ''),
+            'published_at_text' => (string) ($release['published_at_text'] ?? ''),
+            'body' => (string) ($release['body'] ?? ''),
+            'prerelease' => (bool) ($release['prerelease'] ?? false),
+            'is_newer' => (bool) ($release['is_newer'] ?? false),
+        ];
+        $releases = array_map($publicRelease, $releaseInfo['releases'] ?? []);
+        $latest = is_array($releaseInfo['latest'] ?? null)
+            ? $publicRelease($releaseInfo['latest'])
+            : null;
+
+        $app->success('릴리즈 정보를 확인했습니다.', [
+            'current_version' => (string) ($releaseInfo['current_version'] ?? ''),
+            'latest' => $latest,
+            'update_available' => (bool) ($releaseInfo['update_available'] ?? false),
+            'releases' => $releases,
+        ]);
     }
 
     if ($type === 'server_info') {
@@ -424,7 +443,6 @@ function serverInfo(Controller $app): array
 
     return [
         'server_time' => $app->now(),
-        'server_time_sync_interval_seconds' => max(1, $app->int('server_time_sync_interval_seconds', 5)),
         'timezone' => date_default_timezone_get(),
         'php_version' => PHP_VERSION,
         'php_sapi' => PHP_SAPI,
@@ -562,6 +580,10 @@ function installRelease(Controller $app, array $release, string $backupPrefix): 
     $extractDir = $updatesDir . DIRECTORY_SEPARATOR . "extract-{$safeTag}-" . time();
     $zipBody = fetchUrl((string) $release['zip_url']);
 
+    if (strlen($zipBody) > 50 * 1024 * 1024) {
+        throw new RuntimeException('업데이트 압축 파일이 허용 크기(50MB)를 초과합니다.');
+    }
+
     if (file_put_contents($zipPath, $zipBody) === false) {
         throw new RuntimeException('업데이트 파일을 저장할 수 없습니다.');
     }
@@ -571,6 +593,21 @@ function installRelease(Controller $app, array $release, string $backupPrefix): 
 
     if ($zip->open($zipPath) !== true) {
         throw new RuntimeException('업데이트 압축 파일을 열 수 없습니다.');
+    }
+
+    for ($index = 0; $index < $zip->numFiles; $index++) {
+        $entry = str_replace('\\', '/', (string) $zip->getNameIndex($index));
+        $segments = explode('/', $entry);
+
+        if (
+            $entry === ''
+            || str_starts_with($entry, '/')
+            || preg_match('/^[A-Za-z]:\//', $entry) === 1
+            || in_array('..', $segments, true)
+        ) {
+            $zip->close();
+            throw new RuntimeException('업데이트 압축 파일에 안전하지 않은 경로가 있습니다.');
+        }
     }
 
     if (!$zip->extractTo($extractDir)) {

@@ -41,6 +41,13 @@ final class Database
             PDO::ATTR_EMULATE_PREPARES => false,
         ]);
         $this->pdo->exec('PRAGMA foreign_keys = ON');
+        $journalMode = strtolower((string) $this->pdo->query('PRAGMA journal_mode')->fetchColumn());
+
+        if ($journalMode !== 'wal') {
+            $this->pdo->exec('PRAGMA journal_mode = WAL');
+        }
+
+        $this->pdo->exec('PRAGMA synchronous = NORMAL');
 
         return $this->pdo;
     }

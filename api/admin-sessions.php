@@ -16,34 +16,38 @@ try {
     $type = (string) ($input['type'] ?? 'list');
     $now = $app->now();
 
-    $app->pdo()->prepare('DELETE FROM admin_tokens WHERE expired_at <= :now')->execute([':now' => $now]);
-
     if ($type === 'list') {
+        $count = $app->pdo()->prepare('SELECT COUNT(*) FROM admin_tokens WHERE expired_at > :now');
+        $count->execute([':now' => $now]);
+        $total = (int) $count->fetchColumn();
         $statement = $app->pdo()->prepare(
-            'SELECT id, token, created_at, expired_at,
+            'SELECT id, created_at, expired_at,
                     COALESCE(last_seen_at, created_at) AS last_seen_at,
                     COALESCE(ip_address, :unknown_ip) AS ip_address,
-                    COALESCE(user_agent, :unknown_agent) AS user_agent
+                    COALESCE(user_agent, :unknown_agent) AS user_agent,
+                    CASE WHEN token = :current_token THEN 1 ELSE 0 END AS is_current
              FROM admin_tokens
-             WHERE expired_at >= :now
-             ORDER BY COALESCE(last_seen_at, created_at) DESC, id DESC'
+             WHERE expired_at > :now
+             ORDER BY is_current DESC, COALESCE(last_seen_at, created_at) DESC, id DESC
+             LIMIT 100'
         );
         $statement->execute([
             ':unknown_ip' => '알 수 없음',
             ':unknown_agent' => '알 수 없음',
+            ':current_token' => $currentTokenHash,
             ':now' => $now,
         ]);
 
-        $sessions = array_map(static function (array $session) use ($currentTokenHash): array {
-            $isCurrent = hash_equals($currentTokenHash, (string) $session['token']);
-            unset($session['token']);
+        $sessions = array_map(static function (array $session): array {
             $session['id'] = (int) $session['id'];
-            $session['is_current'] = $isCurrent;
+            $session['is_current'] = (bool) $session['is_current'];
 
             return $session;
         }, $statement->fetchAll());
 
         $app->success('로그인 세션을 불러왔습니다.', [
+            'total' => $total,
+            'shown' => count($sessions),
             'sessions' => $sessions,
         ]);
     }

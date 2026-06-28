@@ -14,16 +14,7 @@ try {
 
     $input = $app->jsonInput();
     $app->requireFields($input, ['password']);
-    $app->enforceAuthRateLimit('admin-auth');
-
-    $admin = $app->pdo()->query('SELECT password_hash FROM admin ORDER BY id ASC LIMIT 1')->fetch();
-
-    if (!$admin || !password_verify((string) $input['password'], (string) $admin['password_hash'])) {
-        $app->recordAuthFailure('admin-auth');
-        $app->error('관리자 비밀번호가 올바르지 않습니다.', 403);
-    }
-
-    $app->clearAuthFailures('admin-auth');
+    $app->verifyAdminPassword($input['password'], 403);
     $app->success('관리자 비밀번호가 확인되었습니다.');
 } catch (Throwable $exception) {
     $app->failWithException('관리자 비밀번호 확인 중 오류가 발생했습니다.', $exception);

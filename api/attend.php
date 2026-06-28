@@ -142,9 +142,6 @@ try {
         $createdAt = $app->formatDateTime($duplicateRecord['created_at'] ?? $attendDateTime);
 
         $app->error('이미 출석 처리되었습니다.', 200, [
-            'student_no' => $studentNo,
-            'name' => $name,
-            'attend_date' => $attendDate,
             'attend_datetime' => $createdAt,
             'location_status' => $duplicateRecord['location_status'] ?? 'unchecked',
         ]);
@@ -155,11 +152,7 @@ try {
         : '성공적으로 처리되었습니다.';
 
     $app->success($successMessage, [
-        'student_no' => $studentNo,
-        'name' => $name,
-        'attend_date' => $attendDate,
         'attend_datetime' => $app->formatDateTime($attendDateTime),
-        'attend_time' => $app->formatDateTime($attendDateTime),
         'location_status' => $locationStatus,
     ]);
 } catch (Throwable $exception) {

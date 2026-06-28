@@ -1,8 +1,6 @@
 (function () {
   const FILTER_HISTORY_KEY = 'attendance_filter_history';
   const FILTER_HISTORY_LIMIT = 30;
-  const DEFAULT_SYNC_INTERVAL_MS = 5000;
-  const ACTIVITY_WINDOW_MS = 5 * 60 * 1000;
   const DEFAULT_MAP_CENTER = [37.5665, 126.9780];
   const path = window.location.pathname;
   const {
@@ -22,27 +20,12 @@
 
   let summaryServerTime = null;
   let summaryClockTimer = null;
-  let summarySyncTimer = null;
-  let summarySyncIntervalMs = DEFAULT_SYNC_INTERVAL_MS;
-  let lastAdminActivityAt = Date.now();
 
   try {
     localStorage.removeItem('admin_token');
   } catch (error) {
     // 기존 버전의 중복 토큰 정리 실패가 관리자 화면 실행을 막지 않도록 합니다.
   }
-
-  ['pointerdown', 'keydown', 'scroll', 'touchstart'].forEach((eventName) => {
-    window.addEventListener(eventName, () => {
-      lastAdminActivityAt = Date.now();
-    }, { passive: true });
-  });
-
-  document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) {
-      lastAdminActivityAt = Date.now();
-    }
-  });
 
   function toast(message, type = 'success') {
     if (window.Toastify) {
@@ -186,10 +169,6 @@
       'Content-Type': 'application/json',
     };
 
-    if (!document.hidden && Date.now() - lastAdminActivityAt <= ACTIVITY_WINDOW_MS) {
-      headers['X-Admin-Activity'] = '1';
-    }
-
     const response = await fetch(url, {
       method: 'POST',
       credentials: 'same-origin',
@@ -230,11 +209,6 @@
     })[char]);
   }
 
-  function syncIntervalMs(result = null) {
-    const seconds = Number(result?.server_time_sync_interval_seconds || 5);
-    return Math.max(1, seconds) * 1000;
-  }
-
   function syncSummaryServerTime(value, element) {
     summaryServerTime = parseServerTime(value);
     updateSummaryServerTime(element);
@@ -259,22 +233,6 @@
     }
 
     element.textContent = summaryServerTime ? formatDateTime(summaryServerTime) : '-';
-  }
-
-  function scheduleSummarySync(result, loadSummary) {
-    const nextIntervalMs = syncIntervalMs(result);
-
-    if (summarySyncTimer && nextIntervalMs === summarySyncIntervalMs) {
-      return;
-    }
-
-    summarySyncIntervalMs = nextIntervalMs;
-
-    if (summarySyncTimer) {
-      clearInterval(summarySyncTimer);
-    }
-
-    summarySyncTimer = setInterval(() => loadSummary(false), summarySyncIntervalMs);
   }
 
   function validateStudentInfo(studentNo, name) {
@@ -351,6 +309,30 @@
       gray: '#adb5bd',
       teal: '#20c997',
     };
+    const emptyChartPlugin = {
+      id: 'emptyChart',
+      afterDraw(chart) {
+        const values = chart.data.datasets.flatMap((dataset) => dataset.data || []);
+
+        if (values.some((value) => Number(value) !== 0)) {
+          return;
+        }
+
+        const { ctx, chartArea } = chart;
+
+        if (!chartArea) {
+          return;
+        }
+
+        ctx.save();
+        ctx.fillStyle = '#87928c';
+        ctx.font = '700 13px system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('표시할 데이터가 없습니다.', (chartArea.left + chartArea.right) / 2, (chartArea.top + chartArea.bottom) / 2);
+        ctx.restore();
+      },
+    };
 
     function renderChart(key, elementId, config) {
       const canvas = document.getElementById(elementId);
@@ -409,6 +391,7 @@
 
       renderChart('daily', 'dailyTrendChart', {
         type: 'line',
+        plugins: [emptyChartPlugin],
         data: {
           labels: dailyTrend.map((item) => item.date.slice(5).replace('-', '/')),
           datasets: [{
@@ -433,11 +416,12 @@
 
       renderChart('grade', 'gradeRateChart', {
         type: 'bar',
+        plugins: [emptyChartPlugin],
         data: {
-          labels: gradeStats.map((item) => `${item.grade}학년`),
+          labels: gradeStats.length ? gradeStats.map((item) => `${item.grade}학년`) : ['데이터 없음'],
           datasets: [{
             label: '오늘 출석률',
-            data: gradeStats.map((item) => Number(item.today_rate || 0)),
+            data: gradeStats.length ? gradeStats.map((item) => Number(item.today_rate || 0)) : [0],
             backgroundColor: [chartColors.primary, chartColors.blue, chartColors.teal, chartColors.amber],
             borderRadius: 7,
           }],
@@ -486,11 +470,16 @@
 
       renderChart('location', 'locationStatusChart', {
         type: 'doughnut',
+        plugins: [emptyChartPlugin],
         data: {
-          labels: locationStats.map((item) => locationLabels[item.status] || item.status),
+          labels: locationStats.length
+            ? locationStats.map((item) => locationLabels[item.status] || item.status)
+            : ['데이터 없음'],
           datasets: [{
-            data: locationStats.map((item) => Number(item.count || 0)),
-            backgroundColor: locationStats.map((item) => locationColors[item.status] || chartColors.gray),
+            data: locationStats.length ? locationStats.map((item) => Number(item.count || 0)) : [0],
+            backgroundColor: locationStats.length
+              ? locationStats.map((item) => locationColors[item.status] || chartColors.gray)
+              : [chartColors.gray],
             borderColor: '#ffffff',
             borderWidth: 3,
           }],
@@ -510,6 +499,7 @@
 
       renderChart('hourly', 'hourlyChart', {
         type: 'bar',
+        plugins: [emptyChartPlugin],
         data: {
           labels: hourlyStats.map((item) => `${String(item.hour).padStart(2, '0')}시`),
           datasets: [{
@@ -530,7 +520,7 @@
       });
     }
 
-    async function loadSummary(showError = true) {
+    async function loadSummary() {
       if (summaryRequestPending) {
         return;
       }
@@ -542,9 +532,7 @@
         if (!data) return;
 
         if (data.status !== 1) {
-          if (showError) {
-            toast(data.msg || '대시보드 정보를 불러오지 못했습니다.', 'error');
-          }
+          toast(data.msg || '대시보드 정보를 불러오지 못했습니다.', 'error');
           return;
         }
 
@@ -566,19 +554,14 @@
           syncSummaryServerTime(result.server_time, serverTime);
         }
 
-        scheduleSummarySync(result, loadSummary);
       } catch (error) {
-        scheduleSummarySync(null, loadSummary);
-
-        if (showError) {
-          toast('대시보드 정보를 불러오는 중 오류가 발생했습니다.', 'error');
-        }
+        toast('대시보드 정보를 불러오는 중 오류가 발생했습니다.', 'error');
       } finally {
         summaryRequestPending = false;
       }
     }
 
-    loadSummary(true);
+    loadSummary();
   }
 
   function initList() {
@@ -1103,8 +1086,24 @@
     }
 
     async function openLocationDetail(row) {
-      if (!locationSettings) {
-        await loadLocationSettings();
+      locationDetailModal.hidden = false;
+      locationDetailList.innerHTML = '<div><dt>상세 정보</dt><dd>불러오는 중...</dd></div>';
+
+      try {
+        const [detailData] = await Promise.all([
+          api('/api/admin-edit.php', { type: 'get', id: Number(row.id) }),
+          locationSettings ? Promise.resolve() : loadLocationSettings(),
+        ]);
+
+        if (!detailData || detailData.status !== 1 || !detailData.result) {
+          locationDetailList.innerHTML = '<div><dt>상세 정보</dt><dd>불러오지 못했습니다.</dd></div>';
+          return;
+        }
+
+        row = detailData.result;
+      } catch (error) {
+        locationDetailList.innerHTML = '<div><dt>상세 정보</dt><dd>불러오지 못했습니다.</dd></div>';
+        return;
       }
 
       const settings = locationSettings || {};
@@ -1967,6 +1966,7 @@
     const updateProgressSteps = document.getElementById('updateProgressSteps');
     const serverInfoList = document.getElementById('serverInfoList');
     const adminSessionList = document.getElementById('adminSessionList');
+    const adminSessionCount = document.getElementById('adminSessionCount');
     const revokeOtherSessionsButton = document.getElementById('revokeOtherSessionsButton');
     const progressStages = ['다운로드 중', '백업 중', '설치 중', '적용 중', '마무리 하는 중'];
     let releasesCache = [];
@@ -1975,8 +1975,6 @@
     let serverInfoServerTime = null;
     let serverInfoUptimeSeconds = null;
     let serverInfoClockTimer = null;
-    let serverInfoSyncTimer = null;
-    let serverInfoSyncIntervalMs = DEFAULT_SYNC_INTERVAL_MS;
     let serverInfoRequestPending = false;
     let updateNoticeShown = false;
 
@@ -2215,11 +2213,7 @@
 
         renderServerInfo(data.result || {});
         syncServerInfoLive(data.result || {});
-        scheduleServerInfoSync(data.result || {});
-
       } catch (error) {
-        scheduleServerInfoSync(null);
-
         if (!serverInfoList.querySelector('[data-server-info-value]')) {
           serverInfoList.innerHTML = '<p class="text-secondary mb-0">서버 정보를 불러오지 못했습니다.</p>';
         }
@@ -2242,10 +2236,28 @@
           return;
         }
 
-        renderSessions(Array.isArray(data.result?.sessions) ? data.result.sessions : []);
+        const sessions = Array.isArray(data.result?.sessions) ? data.result.sessions : [];
+        const total = Number(data.result?.total || sessions.length);
+        adminSessionCount.textContent = total > sessions.length
+          ? `${total}개 (최근 ${sessions.length}개 표시)`
+          : `${total}개`;
+        renderSessions(sessions);
       } catch (error) {
+        adminSessionCount.textContent = '-';
         adminSessionList.innerHTML = '<p class="text-secondary mb-0">로그인 세션을 불러오지 못했습니다.</p>';
       }
+    }
+
+    function sessionClientText(userAgent) {
+      const value = String(userAgent || '');
+      const browser = value.includes('Edg/') ? 'Edge'
+        : value.includes('Chrome/') ? 'Chrome'
+          : value.includes('Firefox/') ? 'Firefox'
+            : value.includes('Safari/') ? 'Safari'
+              : '알 수 없는 브라우저';
+      const device = /Android|iPhone|iPad|Mobile/i.test(value) ? '모바일' : 'PC';
+
+      return `${browser} · ${device}`;
     }
 
     function renderSessions(sessions) {
@@ -2255,24 +2267,32 @@
       }
 
       adminSessionList.innerHTML = sessions.map((session) => `
-        <article class="session-item ${session.is_current ? 'is-current' : ''}">
-          <div class="session-item-body">
-            <div class="session-item-title">
+        <details class="session-item ${session.is_current ? 'is-current' : ''}">
+          <summary class="session-summary">
+            <span class="session-item-title">
               <i class="bi bi-laptop" aria-hidden="true"></i>
-              <strong>${escapeHtml(session.ip_address || '알 수 없음')}</strong>
+              <span>
+                <strong>${escapeHtml(sessionClientText(session.user_agent))}</strong>
+                <small>${escapeHtml(session.ip_address || '알 수 없음')}</small>
+              </span>
               ${session.is_current ? '<span class="badge text-bg-success">현재 세션</span>' : ''}
-            </div>
-            <span class="session-user-agent" title="${escapeHtml(session.user_agent || '')}">${escapeHtml(session.user_agent || '알 수 없음')}</span>
+            </span>
+            <time>${escapeHtml(formatDateTimeText(session.last_seen_at))}</time>
+          </summary>
+          <div class="session-details">
             <dl class="session-meta">
               <div><dt>로그인</dt><dd>${escapeHtml(formatDateTimeText(session.created_at))}</dd></div>
               <div><dt>최근 활동</dt><dd>${escapeHtml(formatDateTimeText(session.last_seen_at))}</dd></div>
               <div><dt>만료</dt><dd>${escapeHtml(formatDateTimeText(session.expired_at))}</dd></div>
             </dl>
+            <span class="session-user-agent">${escapeHtml(session.user_agent || '알 수 없음')}</span>
+            <div class="session-detail-actions">
+              <button class="btn btn-sm btn-outline-danger" type="button" data-revoke-session="${Number(session.id)}">
+                이 세션 로그아웃
+              </button>
+            </div>
           </div>
-          <button class="btn btn-sm btn-outline-danger" type="button" data-revoke-session="${Number(session.id)}">
-            로그아웃
-          </button>
-        </article>
+        </details>
       `).join('');
 
       adminSessionList.querySelectorAll('[data-revoke-session]').forEach((button) => {
@@ -2509,22 +2529,6 @@
       if (uptimeText && serverInfoUptimeSeconds !== null) {
         uptimeText.textContent = formatUptimeSeconds(serverInfoUptimeSeconds);
       }
-    }
-
-    function scheduleServerInfoSync(info = null) {
-      const nextIntervalMs = syncIntervalMs(info);
-
-      if (serverInfoSyncTimer && nextIntervalMs === serverInfoSyncIntervalMs) {
-        return;
-      }
-
-      serverInfoSyncIntervalMs = nextIntervalMs;
-
-      if (serverInfoSyncTimer) {
-        clearInterval(serverInfoSyncTimer);
-      }
-
-      serverInfoSyncTimer = setInterval(() => loadServerInfo(), serverInfoSyncIntervalMs);
     }
 
     function openUpdateProgress(title = '업데이트 중') {

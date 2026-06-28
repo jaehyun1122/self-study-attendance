@@ -32,6 +32,12 @@ try {
         $app->error('조회 시작일은 종료일보다 늦을 수 없습니다.', 400);
     }
 
+    $rangeDays = (new DateTimeImmutable($startDate))->diff(new DateTimeImmutable($endDate))->days;
+
+    if ($rangeDays === false || $rangeDays > 366) {
+        $app->error('조회 기간은 최대 1년까지 선택할 수 있습니다.', 400);
+    }
+
     $where = ['attend_date BETWEEN :start_date AND :end_date'];
     $params = [
         ':start_date' => $startDate,
@@ -83,27 +89,20 @@ try {
             id,
             student_no,
             name,
-            attend_date,
             created_at,
-            created_at AS attend_datetime,
             location_status,
-            location_latitude,
-            location_longitude,
-            location_accuracy,
-            location_distance_meters,
-            location_message,
-            location_checked_at,
-            location_approved_at
+            location_distance_meters
         FROM attendance
         WHERE {$whereSql}
-        ORDER BY {$sortColumn} {$sortOrder}, id {$sortOrder}"
+        ORDER BY {$sortColumn} {$sortOrder}, id {$sortOrder}
+        LIMIT 2001"
     );
     $statement->execute($params);
+    $rows = $statement->fetchAll();
 
-    $rows = array_map(static function (array $row) use ($app): array {
-        $row['attend_datetime'] = $app->formatDateTime($row['created_at'] ?? $row['attend_datetime'] ?? null);
-        return $row;
-    }, $statement->fetchAll());
+    if (count($rows) > 2000) {
+        $app->error('조회 결과가 2000건을 초과합니다. 기간이나 검색 조건을 좁혀주세요.', 400);
+    }
 
     $app->success('성공적으로 처리되었습니다.', $rows);
 } catch (Throwable $exception) {

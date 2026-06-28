@@ -5,7 +5,7 @@ declare(strict_types=1);
 return [
     // 기본 정보
     'app_name' => '자습 출결 체크', // 화면에 표시할 서비스 이름
-    'app_version' => 'v1.9.2', // 현재 설치된 앱 버전
+    'app_version' => 'v1.9.3', // 현재 설치된 앱 버전
     'developer_name' => '정재현', // 관리자 화면 하단에 표시할 개발자/운영자 이름
     'powered_by_url' => 'https://github.com/jaehyun1122/self-study-attendance', // 개발자 이름에 연결할 주소
     'timezone' => 'Asia/Seoul', // 날짜와 시간을 계산할 기본 시간대
@@ -15,8 +15,8 @@ return [
     'update_repository_name' => 'self-study-attendance', // 업데이트 확인에 사용할 GitHub 저장소 이름
 
     // 인증 및 설치 설정
-    'initial_admin_password' => '', // 배포 전에 반드시 설정할 설치 마법사 승인 비밀번호
-    'token_expire_hours' => 24, // 관리자 로그인 토큰 유지 시간
+    'initial_admin_password' => 'admin1234', // 배포 전에 반드시 설정할 설치 마법사 승인 비밀번호
+    'token_expire_hours' => 24, // 관리자 페이지 이동 시 갱신되는 로그인 토큰 유지 시간
     'password_length' => [4, 32], // 관리자 비밀번호 최소/최대 글자 수
     'auth_rate_limit' => [
         'max_attempts' => 10, // 동일 IP에서 인증 실패를 허용할 횟수
@@ -24,38 +24,9 @@ return [
         'block_seconds' => 300, // 허용 횟수 초과 시 차단할 시간(초)
     ],
 
-    // 프록시 설정
-    // 앞쪽 헤더부터 확인합니다. 사용하는 프록시의 헤더가 없다면 같은 형식으로 추가할 수 있습니다.
-    'proxy_ip_headers' => [
-        'CF-Connecting-IP', // Cloudflare
-        'True-Client-IP', // Cloudflare Enterprise, Akamai
-        'Fastly-Client-IP', // Fastly
-        'Fly-Client-IP', // Fly.io
-        'CloudFront-Viewer-Address', // AWS CloudFront
-        'X-Azure-ClientIP', // Azure Front Door
-        'X-Real-IP', // Nginx
-        'X-Forwarded-For', // 일반 리버스 프록시, 로드 밸런서
-        'Forwarded', // RFC 7239
-    ],
-    'proxy_https_headers' => [
-        'CF-Visitor', // Cloudflare
-        'CloudFront-Forwarded-Proto', // AWS CloudFront
-        'X-Forwarded-Proto',
-        'X-Forwarded-Scheme',
-        'X-Forwarded-Protocol',
-        'X-Forwarded-Ssl',
-        'Front-End-Https',
-        'X-Url-Scheme',
-        'X-Forwarded-Port',
-        'Forwarded', // RFC 7239
-    ],
-
     // 학생 입력 제한
     'student_no_length' => [5, 5], // 학번 최소/최대 자리 수
     'student_name_length' => [1, 10], // 이름 최소/최대 글자 수
-
-    // 화면 동기화 설정
-    'server_time_sync_interval_seconds' => 5, // 서버 시간/정보를 다시 동기화할 간격(초)
 
     // 경로 설정
     'database_path' => __DIR__ . '/database.sqlite', // SQLite 데이터베이스 파일 경로

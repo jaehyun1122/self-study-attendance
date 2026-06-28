@@ -64,7 +64,10 @@
       </div>
 
       <div class="session-card-actions">
-        <p class="form-text mb-0">현재 로그인된 기기와 최근 활동을 확인하고 세션에서 로그아웃할 수 있습니다.</p>
+        <p class="form-text mb-0">
+          최근 세션 <strong id="adminSessionCount">-</strong>
+          <span class="d-block">항목을 누르면 접속 정보와 관리 기능을 볼 수 있습니다.</span>
+        </p>
         <button class="btn btn-sm btn-outline-danger" id="revokeOtherSessionsButton" type="button">
           다른 세션 모두 종료
         </button>
@@ -74,6 +77,23 @@
         <div class="empty-table-state">
           <div class="loading-spinner" aria-hidden="true"></div>
           <strong>로그인 세션을 불러오는 중입니다.</strong>
+        </div>
+      </div>
+    </section>
+
+    <section class="admin-card form-card system-card system-server-card">
+      <div class="system-card-heading">
+        <div>
+          <span class="section-kicker">Server</span>
+          <h2>서버 정보</h2>
+        </div>
+        <i class="bi bi-hdd-network"></i>
+      </div>
+
+      <div class="server-info-list" id="serverInfoList">
+        <div class="empty-table-state">
+          <div class="loading-spinner" aria-hidden="true"></div>
+          <strong>서버 정보를 불러오는 중입니다.</strong>
         </div>
       </div>
     </section>
@@ -145,23 +165,6 @@
     </form>
   </section>
 </div>
-
-<section class="admin-card form-card system-card system-server-card">
-  <div class="system-card-heading">
-    <div>
-      <span class="section-kicker">Server</span>
-      <h2>서버 정보</h2>
-    </div>
-    <i class="bi bi-hdd-network"></i>
-  </div>
-
-  <div class="server-info-list" id="serverInfoList">
-    <div class="empty-table-state">
-      <div class="loading-spinner" aria-hidden="true"></div>
-      <strong>서버 정보를 불러오는 중입니다.</strong>
-    </div>
-  </div>
-</section>
 
 <div class="admin-modal" id="releaseDetailModal" hidden>
   <section class="admin-modal-dialog release-detail-dialog" role="dialog" aria-modal="true" aria-labelledby="releaseDetailTitle">

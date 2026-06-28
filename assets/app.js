@@ -1,6 +1,5 @@
 (function () {
   const STORAGE_KEY = 'attendance_student';
-  const DEFAULT_SYNC_INTERVAL_MS = 5000;
   const {
     api,
     formatDateTime,
@@ -48,8 +47,6 @@
   let serverTime = null;
   let serverTimeTimer = null;
   let statusInfo = null;
-  let statusSyncTimer = null;
-  let statusSyncIntervalMs = DEFAULT_SYNC_INTERVAL_MS;
   let statusRequestPending = false;
   let studentEditTapCount = 0;
   let studentEditTapTimer = null;
@@ -168,41 +165,17 @@
       }
 
       updateLocationNotice();
-      scheduleStatusSync(statusInfo);
 
       if (data.status !== 1 && showError) {
         toast(data.msg || '상태 확인에 실패했습니다.', 'error');
       }
     } catch (error) {
-      scheduleStatusSync();
-
       if (showError) {
         toast('서버 상태를 확인할 수 없습니다.', 'error');
       }
     } finally {
       statusRequestPending = false;
     }
-  }
-
-  function syncIntervalMs(info = null) {
-    const seconds = Number(info?.server_time_sync_interval_seconds || 5);
-    return Math.max(1, seconds) * 1000;
-  }
-
-  function scheduleStatusSync(info = null) {
-    const nextIntervalMs = syncIntervalMs(info);
-
-    if (statusSyncTimer && nextIntervalMs === statusSyncIntervalMs) {
-      return;
-    }
-
-    statusSyncIntervalMs = nextIntervalMs;
-
-    if (statusSyncTimer) {
-      clearInterval(statusSyncTimer);
-    }
-
-    statusSyncTimer = setInterval(() => loadStatus(false), statusSyncIntervalMs);
   }
 
   function syncServerTime(value) {
@@ -451,7 +424,6 @@
   els.studentChip.addEventListener('click', handleStudentChipTap);
 
   initPasswordToggles(document);
-  scheduleStatusSync();
   loadStatus(false);
   render();
 })();

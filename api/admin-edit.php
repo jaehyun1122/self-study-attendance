@@ -35,9 +35,7 @@ try {
                 id,
                 student_no,
                 name,
-                attend_date,
                 created_at,
-                created_at AS attend_datetime,
                 location_status,
                 location_latitude,
                 location_longitude,
@@ -132,7 +130,7 @@ try {
 
     if ($type === 'get') {
         $record = $recordById($idFromInput($input));
-        $record['attend_datetime'] = $app->formatDateTime($record['created_at'] ?? $record['attend_datetime'] ?? null);
+        $record['created_at'] = $app->formatDateTime($record['created_at'] ?? null);
 
         $app->success('성공적으로 처리되었습니다.', $record);
     }
@@ -144,10 +142,23 @@ try {
     }
 
     if ($type === 'bulk_delete') {
-        $ids = array_values(array_unique(array_filter(array_map(
-            static fn (mixed $value): int => (int) $value,
-            is_array($input['ids'] ?? null) ? $input['ids'] : []
-        ), static fn (int $value): bool => $value > 0)));
+        $rawIds = is_array($input['ids'] ?? null) ? $input['ids'] : [];
+
+        if (count($rawIds) > 500) {
+            $app->error('한 번에 최대 500건까지 삭제할 수 있습니다.', 400);
+        }
+
+        $ids = [];
+        foreach ($rawIds as $value) {
+            $id = filter_var($value, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+
+            if ($id === false) {
+                $app->error('삭제할 기록 번호 형식이 올바르지 않습니다.', 400);
+            }
+
+            $ids[] = $id;
+        }
+        $ids = array_values(array_unique($ids));
 
         if (count($ids) < 1) {
             $app->error('삭제할 출석 기록을 선택해주세요.', 400);
@@ -340,6 +351,11 @@ try {
 
     if ($messageTemplate === 'custom') {
         $locationMessageText = trim((string) ($input['location_message'] ?? ''));
+
+        if ($app->textLength($locationMessageText) > 500) {
+            $app->error('위치 메시지는 500자 이하여야 합니다.', 400);
+        }
+
         $locationMessage = $locationMessageText === '' ? null : $locationMessageText;
     } elseif ($messageTemplate === 'auto') {
         $locationMessage = $computed['message'];
