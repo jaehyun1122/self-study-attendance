@@ -4,7 +4,7 @@ PHP와 SQLite로 동작하는 학교 자습 출석 관리 시스템입니다.
 학생은 학번과 이름으로 출석하고, 관리자는 출석 기록과 위치 인증,
 로그인 세션 및 시스템 업데이트를 관리할 수 있습니다.
 
-- 현재 버전: `v2.0.1`
+- 현재 버전: `v2.0.3`
 - 저장소:
   [jaehyun1122/self-study-attendance](https://github.com/jaehyun1122/self-study-attendance)
 - 라이선스: MIT
