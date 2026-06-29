@@ -317,6 +317,7 @@ final class Controller
         $payload = [
             'status' => $status,
             'msg' => $message,
+            'time' => $this->now(),
         ];
 
         if ($result !== null) {
@@ -460,11 +461,16 @@ final class Controller
         if ($refresh) {
             $sessionHours = max(1, $this->int('token_expire_hours', 12));
             $refreshThresholdHours = max(0, $this->int('token_refresh_threshold_hours', 3));
+            $touchIntervalSeconds = max(0, $this->int('token_touch_interval_seconds', 300));
+
+            $lastSeenAt = $this->dateTimeOrNull($session['last_seen_at'] ?? null);
+
             $shouldExtend = $refreshThresholdHours > 0
                 && $expiresAt <= $nowDateTime->modify("+{$refreshThresholdHours} hours");
-            $lastSeenAt = $this->dateTimeOrNull($session['last_seen_at'] ?? null);
-            $shouldTouch = $lastSeenAt === null
-                || $lastSeenAt <= $nowDateTime->modify('-5 minutes');
+
+            $shouldTouch = $touchIntervalSeconds > 0
+                && ($lastSeenAt === null || $lastSeenAt <= $nowDateTime->modify("-{$touchIntervalSeconds} seconds"));
+
             $newExpiresAt = $shouldExtend
                 ? $nowDateTime->modify("+{$sessionHours} hours")
                 : $expiresAt;

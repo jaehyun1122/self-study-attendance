@@ -5,7 +5,7 @@ declare(strict_types=1);
 return [
     // 기본 정보
     'app_name' => '자습 출결 체크', // 화면에 표시할 서비스 이름
-    'app_version' => 'v2.0.1', // 현재 설치된 앱 버전
+    'app_version' => 'v2.0.2', // 현재 설치된 앱 버전
     'developer_name' => '정재현', // 관리자 화면 하단에 표시할 개발자/운영자 이름
     'powered_by_url' => 'https://github.com/jaehyun1122/self-study-attendance', // 개발자 이름에 연결할 주소
     'timezone' => 'Asia/Seoul', // 날짜와 시간을 계산할 기본 시간대
@@ -19,6 +19,7 @@ return [
     'initial_admin_password' => 'admin1234', // 배포 전에 반드시 설정할 설치 마법사 승인 비밀번호
     'token_expire_hours' => 24, // 로그인 토큰 유지 시간
     'token_refresh_threshold_hours' => 3, // 활동 시 토큰을 연장할 만료 전 남은 시간(0이면 자동 연장 안 함)
+    'token_touch_interval_seconds' => 300, // 최근 활동 시간 갱신 주기(초)
     'password_length' => [4, 32], // 관리자 비밀번호 최소/최대 글자 수
     'auth_rate_limit' => [
         'max_attempts' => 10, // 동일 IP에서 로그인 실패를 허용할 횟수
